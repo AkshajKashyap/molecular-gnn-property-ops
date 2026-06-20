@@ -41,3 +41,20 @@ def test_prepare_csv_command_smoke(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "Train/val/test" in result.output
     assert output_csv.is_file()
+
+
+def test_featurize_csv_command_smoke(tmp_path: Path) -> None:
+    from molgnn_ops.cli import app
+
+    input_csv = tmp_path / "prepared.csv"
+    output_jsonl = tmp_path / "graphs.jsonl"
+    pd.DataFrame({"smiles": ["CCO", "invalid"]}).to_csv(input_csv, index=False)
+
+    result = CliRunner().invoke(
+        app,
+        ["featurize-csv", str(input_csv), str(output_jsonl)],
+    )
+
+    assert result.exit_code == 0
+    assert "Graphs written: 1" in result.output
+    assert output_jsonl.is_file()

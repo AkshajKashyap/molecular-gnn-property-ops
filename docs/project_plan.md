@@ -16,9 +16,15 @@
 - Prepared CSV output with persistent train, validation, and test labels
 - Dataset preparation summaries and CLI workflow
 
+### Milestone 3: Molecular graph featurization
+
+- RDKit SMILES validation and canonicalization
+- Deterministic atom and bond feature vectors
+- Directed molecular graph construction
+- Inspectable JSONL graph persistence and CLI workflow
+
 ## Future milestones
 
-3. Molecule-to-graph featurization.
 4. Fingerprint baseline.
 5. GCN/GIN/MPNN models.
 6. Random split vs scaffold split model evaluation.

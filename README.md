@@ -10,7 +10,8 @@ analysis, FastAPI inference, and a Streamlit molecule explorer.
 
 Milestone 1 established project paths, logging, validated CSV loading, and command-line
 utilities. Milestone 2 adds reproducible dataset preparation and persistent random or
-scaffold split metadata. It does not include graph featurization or model training yet.
+scaffold split metadata. Milestone 3 converts valid SMILES into molecular graph records. It
+does not include tensor conversion or model training yet.
 
 ## Milestone 2 Splits
 
@@ -23,6 +24,16 @@ Python environment and supplies the normal scaffold implementation. If RDKit can
 imported, the code returns an explicitly prefixed `fallback_shape:` key based on normalized
 SMILES token topology. That fallback is deterministic but is not chemically exact and should
 not be reported as a Bemis-Murcko scaffold.
+
+## Milestone 3 Graph Featurization
+
+Molecular graph featurization represents each atom as a node with numeric chemical features
+and each bond as two directed edges with bond features. The current atom features include
+element, degree, formal charge, aromaticity, hybridization, hydrogen count, and ring status.
+Bond features include bond type, conjugation, and ring status.
+
+Graphs are written as JSON Lines so every molecule and its features remain easy to inspect
+before a later milestone introduces framework-specific tensor formats.
 
 ## Installation
 
@@ -68,4 +79,12 @@ molgnn-ops prepare-csv data/raw/molecules.csv data/processed/molecules.csv \
   --dataset-name example \
   --split-strategy scaffold \
   --seed 42
+```
+
+Featurize a prepared CSV into molecular graph records:
+
+```bash
+molgnn-ops featurize-csv \
+  data/processed/example_prepared.csv \
+  data/processed/example_graphs.jsonl
 ```

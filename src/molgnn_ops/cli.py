@@ -5,6 +5,7 @@ import typer
 from rich.console import Console
 
 from molgnn_ops.datasets import load_csv_dataset
+from molgnn_ops.featurization import featurize_records_from_csv
 from molgnn_ops.paths import ensure_project_dirs
 from molgnn_ops.prep import prepare_dataset
 
@@ -73,6 +74,22 @@ def prepare_csv(
         f"Train/val/test: {summary.n_train}/{summary.n_val}/{summary.n_test}"
     )
     console.print(f"Output: {summary.output_path}")
+
+
+@app.command("featurize-csv")
+def featurize_csv(
+    input_csv: Annotated[Path, typer.Argument(help="Prepared molecular CSV.")],
+    output_jsonl: Annotated[Path, typer.Argument(help="Destination JSONL graph file.")],
+) -> None:
+    """Convert molecular CSV rows into inspectable graph records."""
+    summary = featurize_records_from_csv(input_csv, output_jsonl)
+
+    console.print("[bold]Featurized molecular dataset[/bold]")
+    console.print(f"Rows: {summary['n_rows']}")
+    console.print(f"Valid: {summary['n_valid']}")
+    console.print(f"Invalid: {summary['n_invalid']}")
+    console.print(f"Graphs written: {summary['n_graphs_written']}")
+    console.print(f"Output: {output_jsonl}")
 
 
 if __name__ == "__main__":
