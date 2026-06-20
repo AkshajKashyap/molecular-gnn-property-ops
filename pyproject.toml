@@ -1,0 +1,17 @@
+[project]
+name = "molecular-gnn-property-ops"
+version = "0.1.0"
+description = "Molecular property prediction with graph neural networks, scaffold splits, calibration, and deployment."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
