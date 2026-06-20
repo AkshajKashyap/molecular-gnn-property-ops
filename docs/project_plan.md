@@ -1,14 +1,29 @@
 # Project Plan
 
-## Core milestones
+## Completed
 
-1. Dataset loading from molecular SMILES.
-2. Molecule-to-graph featurization.
-3. Fingerprint baseline.
-4. GCN/GIN/MPNN models.
-5. Random split vs scaffold split evaluation.
-6. Calibration and uncertainty analysis.
-7. Error analysis reports.
-8. FastAPI inference endpoint.
-9. Streamlit molecule explorer.
-10. Docker + CI + final portfolio polish.
+### Milestone 1: Project foundation
+
+- Package and project directory structure
+- Validated CSV loading
+- Logging and command-line utilities
+- Unit tests and lint configuration
+
+### Milestone 2: Dataset preparation and split metadata
+
+- Deterministic random splits
+- Bemis-Murcko scaffold grouping with a clearly labeled token fallback
+- Prepared CSV output with persistent train, validation, and test labels
+- Dataset preparation summaries and CLI workflow
+
+## Future milestones
+
+3. Molecule-to-graph featurization.
+4. Fingerprint baseline.
+5. GCN/GIN/MPNN models.
+6. Random split vs scaffold split model evaluation.
+7. Calibration and uncertainty analysis.
+8. Error analysis reports.
+9. FastAPI inference endpoint.
+10. Streamlit molecule explorer.
+11. Docker, CI, and final portfolio polish.

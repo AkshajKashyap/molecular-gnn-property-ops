@@ -12,6 +12,7 @@ dependencies = [
     "pandas>=2.2",
     "pydantic>=2.7",
     "pytest>=8.2",
+    "rdkit>=2025.3",
     "rich>=13.7",
     "ruff>=0.4",
     "scikit-learn>=1.4",
