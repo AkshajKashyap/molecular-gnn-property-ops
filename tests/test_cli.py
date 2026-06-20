@@ -117,3 +117,60 @@ def test_train_fingerprint_baseline_command_smoke(tmp_path: Path) -> None:
     assert "Best model:" in result.output
     assert (output_dir / "metrics.json").is_file()
     assert (output_dir / "report.md").is_file()
+
+
+def test_list_datasets_command_smoke() -> None:
+    from molgnn_ops.cli import app
+
+    result = CliRunner().invoke(app, ["list-datasets"])
+
+    assert result.exit_code == 0
+    assert "esol" in result.output
+    assert "regression" in result.output
+
+
+def test_download_dataset_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    output_path = tmp_path / "delaney-processed.csv"
+    monkeypatch.setattr(
+        cli_module,
+        "download_dataset",
+        lambda name, overwrite=False: output_path,
+    )
+
+    result = CliRunner().invoke(cli_module.app, ["download-dataset", "esol"])
+
+    assert result.exit_code == 0
+    assert str(output_path) in result.output.replace("\n", "")
+
+
+def test_run_fingerprint_benchmark_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    summary = {
+        "dataset_name": "esol",
+        "task_type": "regression",
+        "split_strategy": "scaffold",
+        "best_model": "ridge",
+        "key_metric": "rmse",
+        "validation_metric": 0.5,
+        "test_metric": 0.6,
+        "metrics_json": str(tmp_path / "metrics.json"),
+        "report_md": str(tmp_path / "report.md"),
+        "summary_json": str(tmp_path / "benchmark_summary.json"),
+    }
+    monkeypatch.setattr(
+        cli_module,
+        "run_fingerprint_benchmark",
+        lambda *args, **kwargs: summary,
+    )
+
+    result = CliRunner().invoke(
+        cli_module.app,
+        ["run-fingerprint-benchmark", "esol", "--seed", "42"],
+    )
+
+    assert result.exit_code == 0
+    assert "Best model: ridge" in result.output
+    assert "Test rmse: 0.6" in result.output

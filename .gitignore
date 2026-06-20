@@ -8,6 +8,7 @@ data/raw/
 data/interim/
 data/processed/
 artifacts/models/
+artifacts/benchmarks/
 *.pt
 *.pth
 *.ckpt

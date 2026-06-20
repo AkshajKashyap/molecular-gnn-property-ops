@@ -3,13 +3,17 @@ from typing import Annotated, Literal
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from molgnn_ops.baselines import train_fingerprint_baseline
+from molgnn_ops.data_sources import list_dataset_specs
 from molgnn_ops.datasets import load_csv_dataset
+from molgnn_ops.download import download_dataset
 from molgnn_ops.featurization import featurize_records_from_csv
 from molgnn_ops.fingerprints import featurize_fingerprints_from_csv
-from molgnn_ops.paths import ensure_project_dirs
+from molgnn_ops.paths import ARTIFACTS_DIR, ensure_project_dirs
 from molgnn_ops.prep import prepare_dataset
+from molgnn_ops.workflows import run_fingerprint_benchmark
 
 app = typer.Typer(help="Utilities for the molecular property prediction project.")
 console = Console()
@@ -150,6 +154,78 @@ def train_fingerprint_baseline_command(
     for metric_name, value in test_metrics.items():
         console.print(f"  {metric_name}: {value}")
     console.print(f"Artifacts: {output_dir}")
+
+
+@app.command("list-datasets")
+def list_datasets() -> None:
+    """List molecular benchmark datasets available in the registry."""
+    table = Table(title="Available molecular datasets")
+    table.add_column("Name")
+    table.add_column("Task")
+    table.add_column("Default split")
+    table.add_column("Description")
+    for spec in list_dataset_specs():
+        table.add_row(
+            spec.name,
+            spec.task_type,
+            spec.default_split_strategy,
+            spec.description,
+        )
+    console.print(table)
+
+
+@app.command("download-dataset")
+def download_dataset_command(
+    dataset_name: Annotated[str, typer.Argument(help="Registered dataset name.")],
+    overwrite: Annotated[
+        bool,
+        typer.Option(help="Replace an existing raw dataset file."),
+    ] = False,
+) -> None:
+    """Download a registered molecular benchmark dataset."""
+    output_path = download_dataset(dataset_name, overwrite=overwrite)
+    console.print(f"Downloaded dataset: {dataset_name}")
+    console.print(f"Raw CSV: {output_path}")
+
+
+@app.command("run-fingerprint-benchmark")
+def run_fingerprint_benchmark_command(
+    dataset_name: Annotated[str, typer.Argument(help="Registered dataset name.")],
+    split_strategy: Annotated[
+        Literal["random", "scaffold"],
+        typer.Option(help="Dataset split strategy."),
+    ] = "scaffold",
+    seed: Annotated[int, typer.Option(help="Random seed for splitting and training.")] = 42,
+    radius: Annotated[int, typer.Option(help="Morgan fingerprint radius.")] = 2,
+    n_bits: Annotated[int, typer.Option(help="Fingerprint bit count.")] = 2048,
+    overwrite: Annotated[
+        bool,
+        typer.Option(help="Replace cached source and benchmark artifacts."),
+    ] = False,
+) -> None:
+    """Run a reproducible classical benchmark from download through report."""
+    summary = run_fingerprint_benchmark(
+        dataset_name,
+        ARTIFACTS_DIR / "benchmarks",
+        split_strategy=split_strategy,
+        seed=seed,
+        radius=radius,
+        n_bits=n_bits,
+        overwrite=overwrite,
+    )
+
+    console.print("[bold]Completed fingerprint benchmark[/bold]")
+    console.print(f"Dataset: {summary['dataset_name']}")
+    console.print(f"Task type: {summary['task_type']}")
+    console.print(f"Split strategy: {summary['split_strategy']}")
+    console.print(f"Best model: {summary['best_model']}")
+    console.print(
+        f"Validation {summary['key_metric']}: {summary['validation_metric']}"
+    )
+    console.print(f"Test {summary['key_metric']}: {summary['test_metric']}")
+    console.print(f"Metrics: {summary['metrics_json']}")
+    console.print(f"Report: {summary['report_md']}")
+    console.print(f"Summary: {summary['summary_json']}")
 
 
 if __name__ == "__main__":

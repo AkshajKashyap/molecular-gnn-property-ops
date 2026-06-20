@@ -30,12 +30,19 @@
 - Validation-based model selection and held-out test evaluation
 - Inspectable metrics, predictions, model artifacts, and Markdown reports
 
+### Milestone 5: Real benchmark workflow
+
+- Registered ESOL/Delaney benchmark metadata and cached download support
+- End-to-end preparation, fingerprinting, baseline training, and reporting
+- Reproducible seed-specific benchmark artifact directories
+- Network-free unit tests and a repeatable shell entry point
+
 ## Future milestones
 
-5. GCN/GIN/MPNN models.
-6. Random split vs scaffold split model evaluation.
-7. Calibration and uncertainty analysis.
-8. Error analysis reports.
-9. FastAPI inference endpoint.
-10. Streamlit molecule explorer.
-11. Docker, CI, and final portfolio polish.
+6. GCN/GIN/MPNN models.
+7. Random split vs scaffold split model evaluation.
+8. Calibration and uncertainty analysis.
+9. Error analysis reports.
+10. FastAPI inference endpoint.
+11. Streamlit molecule explorer.
+12. Docker, CI, and final portfolio polish.

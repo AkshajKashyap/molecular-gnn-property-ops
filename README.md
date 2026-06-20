@@ -12,7 +12,8 @@ Milestone 1 established project paths, logging, validated CSV loading, and comma
 utilities. Milestone 2 adds reproducible dataset preparation and persistent random or
 scaffold split metadata. Milestone 3 converts valid SMILES into molecular graph records. It
 does not include tensor conversion. Milestone 4 adds classical Morgan fingerprint baselines
-before any neural network training.
+before any neural network training. Milestone 5 adds a reproducible real-data benchmark
+workflow using ESOL/Delaney.
 
 ## Milestone 2 Splits
 
@@ -46,6 +47,21 @@ Classical baselines matter before GNNs because they show whether added graph-mod
 actually improves held-out performance. Models are selected on the validation split and the
 chosen model is evaluated once on the test split. Each run saves metrics, validation/test
 predictions, a joblib model artifact, and a Markdown report.
+
+## Milestone 5 ESOL Benchmark
+
+ESOL/Delaney is a small aqueous-solubility regression benchmark containing molecular SMILES
+and measured log solubility. It is the first real dataset used to exercise the complete
+classical workflow:
+
+1. Download the registered source CSV.
+2. Prepare deterministic random or scaffold splits.
+3. Generate Morgan fingerprints.
+4. Train and select the classical regression baselines.
+5. Save metrics, predictions, a model, a Markdown report, and a benchmark summary.
+
+Benchmark runs are written under `artifacts/benchmarks/<dataset>/seed_<seed>/`. Unit tests use
+local synthetic files and do not depend on internet access.
 
 ## Installation
 
@@ -115,4 +131,20 @@ Train and evaluate the classical baseline models:
 molgnn-ops train-fingerprint-baseline \
   data/processed/example_fingerprints.npz \
   artifacts/baselines/example
+```
+
+List and download registered benchmark datasets:
+
+```bash
+molgnn-ops list-datasets
+molgnn-ops download-dataset esol
+```
+
+Run the complete ESOL fingerprint benchmark:
+
+```bash
+molgnn-ops run-fingerprint-benchmark esol \
+  --split-strategy scaffold \
+  --seed 42 \
+  --overwrite
 ```
