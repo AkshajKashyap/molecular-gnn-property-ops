@@ -23,7 +23,7 @@ from molgnn_ops.fingerprints import featurize_fingerprints_from_csv
 from molgnn_ops.paths import ARTIFACTS_DIR, ensure_project_dirs
 from molgnn_ops.prep import prepare_dataset
 from molgnn_ops.reporting import write_diagnostics_report
-from molgnn_ops.workflows import run_fingerprint_benchmark
+from molgnn_ops.workflows import run_fingerprint_benchmark, run_gnn_benchmark
 
 app = typer.Typer(help="Utilities for the molecular property prediction project.")
 console = Console()
@@ -346,6 +346,86 @@ def compare_splits(
     console.print(f"Metrics: {summary['comparison_metrics_csv']}")
     console.print(f"Summary: {summary['comparison_summary_json']}")
     console.print(f"Report: {summary['comparison_report_md']}")
+
+
+@app.command("train-gnn-regressor")
+def train_gnn_regressor_command(
+    graph_jsonl: Annotated[Path, typer.Argument(help="Labeled molecular graph JSONL.")],
+    output_dir: Annotated[Path, typer.Argument(help="GNN artifact directory.")],
+    model_name: Annotated[
+        Literal["gcn", "gin"],
+        typer.Option(help="Graph neural network architecture."),
+    ] = "gcn",
+    seed: Annotated[int, typer.Option(help="Random seed.")] = 42,
+    epochs: Annotated[int, typer.Option(help="Maximum training epochs.")] = 50,
+    batch_size: Annotated[int, typer.Option(help="Graphs per training batch.")] = 32,
+    hidden_dim: Annotated[int, typer.Option(help="Hidden feature width.")] = 64,
+    num_layers: Annotated[int, typer.Option(help="Message-passing layer count.")] = 3,
+    dropout: Annotated[float, typer.Option(help="Dropout probability.")] = 0.1,
+) -> None:
+    """Train a minimal GCN or GIN molecular regression baseline."""
+    from molgnn_ops.gnn_train import train_gnn_regressor
+
+    summary = train_gnn_regressor(
+        graph_jsonl,
+        output_dir,
+        model_name=model_name,
+        seed=seed,
+        epochs=epochs,
+        batch_size=batch_size,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
+        dropout=dropout,
+    )
+    console.print("[bold]Completed GNN regression training[/bold]")
+    console.print(f"Model: {summary['model_name']}")
+    console.print(f"Device: {summary['device']}")
+    console.print(f"Best epoch: {summary['best_epoch']}")
+    console.print(f"Best validation RMSE: {summary['best_val_rmse']}")
+    console.print(f"Test RMSE: {summary['test_rmse']}")
+    console.print(f"Metrics: {summary['artifacts']['metrics']}")
+    console.print(f"Report: {summary['artifacts']['report']}")
+
+
+@app.command("run-gnn-benchmark")
+def run_gnn_benchmark_command(
+    dataset_name: Annotated[str, typer.Argument(help="Registered regression dataset.")],
+    output_dir: Annotated[Path, typer.Argument(help="GNN benchmark artifact directory.")],
+    split_strategy: Annotated[
+        Literal["random", "scaffold"],
+        typer.Option(help="Dataset split strategy."),
+    ] = "scaffold",
+    model_name: Annotated[
+        Literal["gcn", "gin"],
+        typer.Option(help="Graph neural network architecture."),
+    ] = "gcn",
+    seed: Annotated[int, typer.Option(help="Random seed.")] = 42,
+    epochs: Annotated[int, typer.Option(help="Maximum training epochs.")] = 50,
+    overwrite: Annotated[
+        bool,
+        typer.Option(help="Replace cached source and benchmark artifacts."),
+    ] = False,
+) -> None:
+    """Run dataset preparation, graph featurization, and GNN training."""
+    summary = run_gnn_benchmark(
+        dataset_name,
+        output_dir,
+        split_strategy=split_strategy,
+        model_name=model_name,
+        seed=seed,
+        epochs=epochs,
+        overwrite=overwrite,
+    )
+    console.print("[bold]Completed molecular GNN benchmark[/bold]")
+    console.print(f"Dataset: {summary['dataset_name']}")
+    console.print(f"Model: {summary['model_name']}")
+    console.print(f"Split strategy: {summary['split_strategy']}")
+    console.print(f"Best epoch: {summary['best_epoch']}")
+    console.print(f"Best validation RMSE: {summary['best_val_rmse']}")
+    console.print(f"Test RMSE: {summary['test_rmse']}")
+    console.print(f"Metrics: {summary['metrics_json']}")
+    console.print(f"Report: {summary['report_md']}")
+    console.print(f"Summary: {summary['summary_json']}")
 
 
 if __name__ == "__main__":

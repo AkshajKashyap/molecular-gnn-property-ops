@@ -21,6 +21,12 @@ dependencies = [
     "typer>=0.12",
 ]
 
+[project.optional-dependencies]
+gnn = [
+    "torch>=2.12",
+    "torch-geometric>=2.7",
+]
+
 [project.scripts]
 molgnn-ops = "molgnn_ops.cli:app"
 

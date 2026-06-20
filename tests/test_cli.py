@@ -245,3 +245,62 @@ def test_compare_splits_command_smoke(tmp_path: Path, monkeypatch) -> None:
     assert captured["seeds"] == [42, 43]
     assert captured["split_strategies"] == ["random", "scaffold"]
     assert "scaffold: mean test rmse=1.2" in result.output
+
+
+def test_train_gnn_regressor_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+    from molgnn_ops import gnn_train
+
+    summary = {
+        "model_name": "gcn",
+        "device": "cpu",
+        "best_epoch": 2,
+        "best_val_rmse": 1.1,
+        "test_rmse": 1.2,
+        "artifacts": {
+            "metrics": str(tmp_path / "metrics.json"),
+            "report": str(tmp_path / "report.md"),
+        },
+    }
+    monkeypatch.setattr(gnn_train, "train_gnn_regressor", lambda *args, **kwargs: summary)
+
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "train-gnn-regressor",
+            str(tmp_path / "graphs.jsonl"),
+            str(tmp_path / "output"),
+            "--epochs",
+            "2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Best validation RMSE: 1.1" in result.output
+    assert "Test RMSE: 1.2" in result.output
+
+
+def test_run_gnn_benchmark_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    summary = {
+        "dataset_name": "esol",
+        "model_name": "gcn",
+        "split_strategy": "scaffold",
+        "best_epoch": 4,
+        "best_val_rmse": 1.3,
+        "test_rmse": 1.4,
+        "metrics_json": str(tmp_path / "metrics.json"),
+        "report_md": str(tmp_path / "report.md"),
+        "summary_json": str(tmp_path / "summary.json"),
+    }
+    monkeypatch.setattr(cli_module, "run_gnn_benchmark", lambda *args, **kwargs: summary)
+
+    result = CliRunner().invoke(
+        cli_module.app,
+        ["run-gnn-benchmark", "esol", str(tmp_path), "--epochs", "2"],
+    )
+
+    assert result.exit_code == 0
+    assert "Completed molecular GNN benchmark" in result.output
+    assert "Test RMSE: 1.4" in result.output

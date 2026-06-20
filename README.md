@@ -14,7 +14,7 @@ scaffold split metadata. Milestone 3 converts valid SMILES into molecular graph 
 does not include tensor conversion. Milestone 4 adds classical Morgan fingerprint baselines
 before any neural network training. Milestone 5 adds a reproducible real-data benchmark
 workflow using ESOL/Delaney. Milestone 6 adds benchmark diagnostics and seeded split
-comparison before any GNN work begins.
+comparison. Milestone 7 adds the first small GCN and GIN molecular graph baselines.
 
 ## Milestone 2 Splits
 
@@ -76,6 +76,17 @@ splits keep scaffold groups separate and are therefore expected to be harder whe
 molecules are structurally less similar to training molecules. Multi-seed comparison helps
 separate that split effect from one favorable or unfavorable random seed.
 
+## Milestone 7 First GNN Baselines
+
+A graph convolutional network (GCN) averages and transforms neighboring atom features. A
+graph isomorphism network (GIN) uses learned neighborhood aggregation designed to distinguish
+more graph structures. Both baselines use global mean pooling and a small regression head.
+
+These models intentionally remain simple. The scaffold-split Morgan random forest is still
+the comparison point, and GNN results are reported without assuming that added complexity
+will improve RMSE. Bond features are preserved in the graph data, but these first GCN/GIN
+operators use graph connectivity and atom features only.
+
 ## Installation
 
 Create and activate a Python 3.11+ virtual environment, then install the project in editable
@@ -83,6 +94,14 @@ mode:
 
 ```bash
 python -m pip install -e .
+```
+
+For CPU-only GNN development, install the verified PyTorch CPU wheel before the optional GNN
+extra:
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -e ".[gnn]"
 ```
 
 ## Tests and Linting
@@ -178,4 +197,31 @@ molgnn-ops compare-splits esol artifacts/benchmarks/esol/split_comparison \
   --seeds 42,43,44 \
   --split-strategies random,scaffold \
   --overwrite
+```
+
+Train directly from an existing graph JSONL file:
+
+```bash
+molgnn-ops train-gnn-regressor data/processed/example_graphs.jsonl artifacts/gnn/example \
+  --model-name gcn \
+  --seed 42 \
+  --epochs 50
+```
+
+Run the complete ESOL GNN workflow:
+
+```bash
+molgnn-ops run-gnn-benchmark esol artifacts/benchmarks/esol/gnn_gcn_seed_42 \
+  --split-strategy scaffold \
+  --model-name gcn \
+  --seed 42 \
+  --epochs 50 \
+  --overwrite
+```
+
+Equivalent reproducible scripts are available for both architectures:
+
+```bash
+bash scripts/run_esol_gcn_benchmark.sh
+bash scripts/run_esol_gin_benchmark.sh
 ```

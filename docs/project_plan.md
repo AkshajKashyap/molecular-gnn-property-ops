@@ -44,12 +44,19 @@
 - Multi-seed random versus scaffold fingerprint baseline comparison
 - Reproducible diagnostic and comparison shell entry points
 
+### Milestone 7: First molecular GNN baselines
+
+- PyTorch Geometric conversion of inspectable molecular graph records
+- Minimal GCN and GIN graph-level regression models
+- Validation-selected training with early stopping and held-out evaluation
+- Reproducible ESOL GNN workflows and fingerprint-baseline comparison
+
 ## Future milestones
 
-7. GCN/GIN/MPNN models.
-8. Random split vs scaffold split GNN evaluation.
-9. Calibration and uncertainty analysis.
-10. Extended error analysis reports.
-11. FastAPI inference endpoint.
-12. Streamlit molecule explorer.
-13. Docker, CI, and final portfolio polish.
+8. GNN hyperparameter and architecture comparison.
+9. Random split vs scaffold split GNN evaluation.
+10. Calibration and uncertainty analysis.
+11. Extended error analysis reports.
+12. FastAPI inference endpoint.
+13. Streamlit molecule explorer.
+14. Docker, CI, and final portfolio polish.

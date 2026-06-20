@@ -164,3 +164,52 @@ def write_diagnostics_report(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_gnn_report(metrics: dict, output_path: Path) -> None:
+    """Write a compact report for one graph neural network regression run."""
+    lines = [
+        f"# {str(metrics['model_name']).upper()} Molecular Graph Baseline",
+        "",
+        f"- Dataset source: `{metrics['dataset_source']}`",
+        f"- Device: `{metrics['device']}`",
+        f"- Seed: {metrics['seed']}",
+        f"- Best epoch: {metrics['best_epoch']}",
+        "",
+        "## Hyperparameters",
+        "",
+    ]
+    for name, value in metrics["hyperparameters"].items():
+        lines.append(f"- {name}: {_format_metric(value)}")
+
+    lines.extend(["", "## Validation Metrics", ""])
+    for name, value in metrics["validation_metrics"].items():
+        lines.append(f"- {name}: {_format_metric(value)}")
+    lines.extend(["", "## Test Metrics", ""])
+    for name, value in metrics["test_metrics"].items():
+        lines.append(f"- {name}: {_format_metric(value)}")
+
+    lines.extend(["", "## Fingerprint Baseline Comparison", ""])
+    comparison = metrics.get("fingerprint_comparison")
+    if comparison is None:
+        lines.append("No nearby fingerprint baseline metrics were available for comparison.")
+    else:
+        difference = comparison["rmse_difference"]
+        direction = "lower" if difference < 0 else "higher"
+        lines.extend(
+            [
+                "- Fingerprint test RMSE: "
+                f"{_format_metric(comparison['fingerprint_test_rmse'])}",
+                f"- GNN test RMSE: {_format_metric(comparison['gnn_test_rmse'])}",
+                f"- GNN RMSE is {abs(difference):.4f} {direction} than the fingerprint baseline.",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "The comparison is descriptive for this split and seed. Lower RMSE is better; "
+            "model conclusions should be checked across multiple seeds and hyperparameters.",
+        ]
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

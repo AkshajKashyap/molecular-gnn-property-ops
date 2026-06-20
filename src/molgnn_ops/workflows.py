@@ -4,6 +4,7 @@ from pathlib import Path
 from molgnn_ops.baselines import train_fingerprint_baseline
 from molgnn_ops.data_sources import get_dataset_spec
 from molgnn_ops.download import download_dataset
+from molgnn_ops.featurization import featurize_records_from_csv
 from molgnn_ops.fingerprints import featurize_fingerprints_from_csv
 from molgnn_ops.prep import prepare_dataset
 
@@ -96,6 +97,92 @@ def run_fingerprint_benchmark(
         "test_metric": test_metrics.get(selection_metric),
         "preparation": preparation_summary.model_dump(mode="json"),
         "fingerprints": fingerprint_summary,
+    }
+    summary_path.write_text(
+        json.dumps(summary, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    return summary
+
+
+def run_gnn_benchmark(
+    dataset_name: str,
+    output_dir: Path,
+    split_strategy: str = "scaffold",
+    model_name: str = "gcn",
+    seed: int = 42,
+    epochs: int = 50,
+    overwrite: bool = False,
+) -> dict:
+    """Run the complete download-to-report molecular GNN benchmark workflow."""
+    from molgnn_ops.gnn_train import train_gnn_regressor
+
+    spec = get_dataset_spec(dataset_name)
+    if spec.task_type != "regression":
+        raise ValueError("GNN benchmark currently supports regression datasets only")
+    summary_path = output_dir / "gnn_benchmark_summary.json"
+    if summary_path.is_file() and not overwrite:
+        cached_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        requested_config = {
+            "dataset_name": spec.name,
+            "split_strategy": split_strategy,
+            "model_name": model_name,
+            "seed": seed,
+            "epochs": epochs,
+        }
+        if any(cached_summary.get(key) != value for key, value in requested_config.items()):
+            raise ValueError(
+                f"Benchmark directory {output_dir} contains a different configuration; "
+                "set overwrite=True to replace it"
+            )
+        artifact_keys = ("graph_jsonl", "metrics_json", "report_md", "model_checkpoint")
+        if all(Path(cached_summary[key]).is_file() for key in artifact_keys):
+            return cached_summary
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    raw_csv = download_dataset(spec.name, overwrite=overwrite)
+    prepared_csv = output_dir / "prepared.csv"
+    graph_jsonl = output_dir / "graphs.jsonl"
+    training_output_dir = output_dir / "training"
+    preparation_summary = prepare_dataset(
+        input_csv=raw_csv,
+        output_csv=prepared_csv,
+        smiles_col=spec.smiles_col,
+        target_col=spec.target_col,
+        dataset_name=spec.name,
+        split_strategy=split_strategy,
+        seed=seed,
+    )
+    graph_summary = featurize_records_from_csv(prepared_csv, graph_jsonl)
+    training_summary = train_gnn_regressor(
+        graph_jsonl,
+        training_output_dir,
+        model_name=model_name,
+        seed=seed,
+        epochs=epochs,
+    )
+    artifacts = training_summary["artifacts"]
+    summary = {
+        "dataset_name": spec.name,
+        "task_type": spec.task_type,
+        "split_strategy": split_strategy,
+        "model_name": model_name,
+        "seed": seed,
+        "epochs": epochs,
+        "raw_csv": str(raw_csv),
+        "prepared_csv": str(prepared_csv),
+        "graph_jsonl": str(graph_jsonl),
+        "training_output_dir": str(training_output_dir),
+        "metrics_json": artifacts["metrics"],
+        "report_md": artifacts["report"],
+        "model_checkpoint": artifacts["model"],
+        "summary_json": str(summary_path),
+        "best_epoch": training_summary["best_epoch"],
+        "best_val_rmse": training_summary["best_val_rmse"],
+        "test_rmse": training_summary["test_rmse"],
+        "fingerprint_comparison": training_summary["fingerprint_comparison"],
+        "preparation": preparation_summary.model_dump(mode="json"),
+        "graphs": graph_summary,
     }
     summary_path.write_text(
         json.dumps(summary, indent=2, sort_keys=True, allow_nan=False) + "\n",
