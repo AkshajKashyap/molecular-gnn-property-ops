@@ -1,9 +1,28 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "molecular-gnn-property-ops"
 version = "0.1.0"
 description = "Molecular property prediction with graph neural networks, scaffold splits, calibration, and deployment."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pydantic>=2.7",
+    "pytest>=8.2",
+    "rich>=13.7",
+    "ruff>=0.4",
+    "scikit-learn>=1.4",
+    "typer>=0.12",
+]
+
+[project.scripts]
+molgnn-ops = "molgnn_ops.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

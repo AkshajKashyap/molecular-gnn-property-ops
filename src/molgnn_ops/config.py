@@ -1,6 +1,3 @@
-from pathlib import Path
+from molgnn_ops.paths import ARTIFACTS_DIR, DATA_DIR, PROJECT_ROOT, REPORTS_DIR
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "data"
-REPORTS_DIR = PROJECT_ROOT / "reports"
-ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
+__all__ = ["ARTIFACTS_DIR", "DATA_DIR", "PROJECT_ROOT", "REPORTS_DIR"]
