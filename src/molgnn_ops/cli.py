@@ -4,8 +4,10 @@ from typing import Annotated, Literal
 import typer
 from rich.console import Console
 
+from molgnn_ops.baselines import train_fingerprint_baseline
 from molgnn_ops.datasets import load_csv_dataset
 from molgnn_ops.featurization import featurize_records_from_csv
+from molgnn_ops.fingerprints import featurize_fingerprints_from_csv
 from molgnn_ops.paths import ensure_project_dirs
 from molgnn_ops.prep import prepare_dataset
 
@@ -90,6 +92,64 @@ def featurize_csv(
     console.print(f"Invalid: {summary['n_invalid']}")
     console.print(f"Graphs written: {summary['n_graphs_written']}")
     console.print(f"Output: {output_jsonl}")
+
+
+@app.command("fingerprint-csv")
+def fingerprint_csv(
+    input_csv: Annotated[Path, typer.Argument(help="Prepared molecular CSV.")],
+    output_npz: Annotated[Path, typer.Argument(help="Destination fingerprint NPZ file.")],
+    radius: Annotated[int, typer.Option(help="Morgan fingerprint radius.")] = 2,
+    n_bits: Annotated[int, typer.Option(help="Fingerprint bit count.")] = 2048,
+) -> None:
+    """Convert prepared molecular rows into Morgan fingerprints."""
+    summary = featurize_fingerprints_from_csv(
+        input_csv,
+        output_npz,
+        radius=radius,
+        n_bits=n_bits,
+    )
+
+    console.print("[bold]Featurized Morgan fingerprints[/bold]")
+    console.print(f"Rows: {summary['n_rows']}")
+    console.print(f"Valid SMILES: {summary['n_valid']}")
+    console.print(f"Invalid SMILES: {summary['n_invalid']}")
+    console.print(f"Missing targets: {summary['n_missing_targets']}")
+    console.print(f"Rows written: {summary['n_written']}")
+    console.print(f"Output: {output_npz}")
+
+
+@app.command("train-fingerprint-baseline")
+def train_fingerprint_baseline_command(
+    input_npz: Annotated[Path, typer.Argument(help="Fingerprint NPZ dataset.")],
+    output_dir: Annotated[Path, typer.Argument(help="Baseline artifact directory.")],
+    task_type: Annotated[
+        Literal["auto", "classification", "regression"],
+        typer.Option(help="Prediction task type."),
+    ] = "auto",
+    seed: Annotated[int, typer.Option(help="Random seed for model training.")] = 42,
+) -> None:
+    """Train and evaluate classical fingerprint baseline models."""
+    metrics = train_fingerprint_baseline(
+        input_npz,
+        output_dir,
+        task_type=task_type,
+        seed=seed,
+    )
+    best_model = str(metrics["best_model"])
+    model_results = metrics["models"]
+    validation_metrics = model_results[best_model]["validation"]
+    test_metrics = metrics["test_metrics"]
+
+    console.print("[bold]Trained Morgan fingerprint baseline[/bold]")
+    console.print(f"Task type: {metrics['task_type']}")
+    console.print(f"Best model: {best_model}")
+    console.print("Validation metrics:")
+    for metric_name, value in validation_metrics.items():
+        console.print(f"  {metric_name}: {value}")
+    console.print("Test metrics:")
+    for metric_name, value in test_metrics.items():
+        console.print(f"  {metric_name}: {value}")
+    console.print(f"Artifacts: {output_dir}")
 
 
 if __name__ == "__main__":

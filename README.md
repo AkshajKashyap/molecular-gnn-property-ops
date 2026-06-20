@@ -11,7 +11,8 @@ analysis, FastAPI inference, and a Streamlit molecule explorer.
 Milestone 1 established project paths, logging, validated CSV loading, and command-line
 utilities. Milestone 2 adds reproducible dataset preparation and persistent random or
 scaffold split metadata. Milestone 3 converts valid SMILES into molecular graph records. It
-does not include tensor conversion or model training yet.
+does not include tensor conversion. Milestone 4 adds classical Morgan fingerprint baselines
+before any neural network training.
 
 ## Milestone 2 Splits
 
@@ -34,6 +35,17 @@ Bond features include bond type, conjugation, and ring status.
 
 Graphs are written as JSON Lines so every molecule and its features remain easy to inspect
 before a later milestone introduces framework-specific tensor formats.
+
+## Milestone 4 Fingerprint Baselines
+
+Morgan fingerprints encode the circular atom environments around each molecule as a fixed
+binary vector. Logistic regression, ridge regression, and random forests can use these vectors
+directly, providing fast and credible reference models.
+
+Classical baselines matter before GNNs because they show whether added graph-model complexity
+actually improves held-out performance. Models are selected on the validation split and the
+chosen model is evaluated once on the test split. Each run saves metrics, validation/test
+predictions, a joblib model artifact, and a Markdown report.
 
 ## Installation
 
@@ -87,4 +99,20 @@ Featurize a prepared CSV into molecular graph records:
 molgnn-ops featurize-csv \
   data/processed/example_prepared.csv \
   data/processed/example_graphs.jsonl
+```
+
+Create Morgan fingerprints from a prepared CSV:
+
+```bash
+molgnn-ops fingerprint-csv \
+  data/processed/example_prepared.csv \
+  data/processed/example_fingerprints.npz
+```
+
+Train and evaluate the classical baseline models:
+
+```bash
+molgnn-ops train-fingerprint-baseline \
+  data/processed/example_fingerprints.npz \
+  artifacts/baselines/example
 ```

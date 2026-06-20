@@ -23,9 +23,15 @@
 - Directed molecular graph construction
 - Inspectable JSONL graph persistence and CLI workflow
 
+### Milestone 4: Classical fingerprint baselines
+
+- RDKit Morgan fingerprint generation and compressed NPZ datasets
+- Logistic/ridge and random forest reference models
+- Validation-based model selection and held-out test evaluation
+- Inspectable metrics, predictions, model artifacts, and Markdown reports
+
 ## Future milestones
 
-4. Fingerprint baseline.
 5. GCN/GIN/MPNN models.
 6. Random split vs scaffold split model evaluation.
 7. Calibration and uncertainty analysis.
