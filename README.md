@@ -13,7 +13,8 @@ utilities. Milestone 2 adds reproducible dataset preparation and persistent rand
 scaffold split metadata. Milestone 3 converts valid SMILES into molecular graph records. It
 does not include tensor conversion. Milestone 4 adds classical Morgan fingerprint baselines
 before any neural network training. Milestone 5 adds a reproducible real-data benchmark
-workflow using ESOL/Delaney.
+workflow using ESOL/Delaney. Milestone 6 adds benchmark diagnostics and seeded split
+comparison before any GNN work begins.
 
 ## Milestone 2 Splits
 
@@ -62,6 +63,18 @@ classical workflow:
 
 Benchmark runs are written under `artifacts/benchmarks/<dataset>/seed_<seed>/`. Unit tests use
 local synthetic files and do not depend on internet access.
+
+## Milestone 6 Diagnostics and Split Comparison
+
+Diagnostics come before GNNs so target shifts, scaffold concentration, prediction outliers,
+and structural novelty are visible before adding model complexity. The diagnostics workflow
+summarizes errors and train-test Morgan similarity, lists the worst predictions, and writes
+four inspectable plots plus JSON and Markdown reports.
+
+Random splits can place close structural analogues in both training and test sets. Scaffold
+splits keep scaffold groups separate and are therefore expected to be harder when test
+molecules are structurally less similar to training molecules. Multi-seed comparison helps
+separate that split effect from one favorable or unfavorable random seed.
 
 ## Installation
 
@@ -146,5 +159,23 @@ Run the complete ESOL fingerprint benchmark:
 molgnn-ops run-fingerprint-benchmark esol \
   --split-strategy scaffold \
   --seed 42 \
+  --overwrite
+```
+
+Generate diagnostics for the existing ESOL seed-42 benchmark:
+
+```bash
+molgnn-ops diagnose-benchmark \
+  artifacts/benchmarks/esol/seed_42/prepared.csv \
+  artifacts/benchmarks/esol/seed_42/baseline/predictions.csv \
+  artifacts/benchmarks/esol/seed_42/diagnostics
+```
+
+Compare random and scaffold splits across three seeds:
+
+```bash
+molgnn-ops compare-splits esol artifacts/benchmarks/esol/split_comparison \
+  --seeds 42,43,44 \
+  --split-strategies random,scaffold \
   --overwrite
 ```

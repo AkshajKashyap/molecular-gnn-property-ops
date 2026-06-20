@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -6,13 +7,22 @@ from rich.console import Console
 from rich.table import Table
 
 from molgnn_ops.baselines import train_fingerprint_baseline
+from molgnn_ops.benchmark_compare import run_split_comparison
 from molgnn_ops.data_sources import list_dataset_specs
 from molgnn_ops.datasets import load_csv_dataset
+from molgnn_ops.diagnostics import (
+    prediction_error_summary,
+    scaffold_distribution_summary,
+    split_target_summary,
+    train_test_similarity_summary,
+    worst_predictions,
+)
 from molgnn_ops.download import download_dataset
 from molgnn_ops.featurization import featurize_records_from_csv
 from molgnn_ops.fingerprints import featurize_fingerprints_from_csv
 from molgnn_ops.paths import ARTIFACTS_DIR, ensure_project_dirs
 from molgnn_ops.prep import prepare_dataset
+from molgnn_ops.reporting import write_diagnostics_report
 from molgnn_ops.workflows import run_fingerprint_benchmark
 
 app = typer.Typer(help="Utilities for the molecular property prediction project.")
@@ -226,6 +236,116 @@ def run_fingerprint_benchmark_command(
     console.print(f"Metrics: {summary['metrics_json']}")
     console.print(f"Report: {summary['report_md']}")
     console.print(f"Summary: {summary['summary_json']}")
+
+
+@app.command("diagnose-benchmark")
+def diagnose_benchmark(
+    prepared_csv: Annotated[Path, typer.Argument(help="Prepared benchmark CSV.")],
+    predictions_csv: Annotated[Path, typer.Argument(help="Baseline predictions CSV.")],
+    output_dir: Annotated[Path, typer.Argument(help="Diagnostics artifact directory.")],
+) -> None:
+    """Generate benchmark diagnostics, figures, and a Markdown report."""
+    from molgnn_ops.plots import (
+        plot_absolute_error_histogram,
+        plot_predicted_vs_actual,
+        plot_target_distribution,
+        plot_test_similarity_histogram,
+    )
+
+    figures_dir = output_dir / "figures"
+    plot_paths = {
+        "target_distribution": figures_dir / "target_distribution.png",
+        "predicted_vs_actual": figures_dir / "predicted_vs_actual.png",
+        "absolute_error_histogram": figures_dir / "absolute_error_histogram.png",
+        "test_similarity_histogram": figures_dir / "test_similarity_histogram.png",
+    }
+    plot_target_distribution(prepared_csv, plot_paths["target_distribution"])
+    plot_predicted_vs_actual(predictions_csv, plot_paths["predicted_vs_actual"])
+    plot_absolute_error_histogram(predictions_csv, plot_paths["absolute_error_histogram"])
+    plot_test_similarity_histogram(prepared_csv, plot_paths["test_similarity_histogram"])
+
+    diagnostics = {
+        "target_distribution": split_target_summary(prepared_csv),
+        "prediction_errors": prediction_error_summary(predictions_csv),
+        "worst_test_predictions": worst_predictions(predictions_csv),
+        "scaffold_distribution": scaffold_distribution_summary(prepared_csv),
+        "train_test_similarity": train_test_similarity_summary(prepared_csv),
+        "plots": {
+            name: path.relative_to(output_dir).as_posix()
+            for name, path in plot_paths.items()
+        },
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    diagnostics_json = output_dir / "diagnostics.json"
+    report_md = output_dir / "diagnostics_report.md"
+    diagnostics_json.write_text(
+        json.dumps(diagnostics, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    write_diagnostics_report(diagnostics, report_md)
+
+    test_errors = diagnostics["prediction_errors"].get("test", {})
+    similarity = diagnostics["train_test_similarity"]
+    scaffolds = diagnostics["scaffold_distribution"]
+    console.print("[bold]Completed benchmark diagnostics[/bold]")
+    console.print(f"Test RMSE: {test_errors.get('rmse')}")
+    console.print(f"Test MAE: {test_errors.get('mae')}")
+    console.print(f"Unique scaffolds: {scaffolds['n_unique_scaffolds']}")
+    console.print(f"Mean max train similarity: {similarity['mean_max_similarity']}")
+    console.print(f"Diagnostics: {diagnostics_json}")
+    console.print(f"Report: {report_md}")
+
+
+def _parse_seeds(value: str) -> list[int]:
+    try:
+        seeds = [int(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as error:
+        raise typer.BadParameter("seeds must be comma-separated integers") from error
+    if not seeds:
+        raise typer.BadParameter("at least one seed is required")
+    return seeds
+
+
+def _parse_split_strategies(value: str) -> list[str]:
+    strategies = [item.strip().lower() for item in value.split(",") if item.strip()]
+    invalid = sorted(set(strategies).difference({"random", "scaffold"}))
+    if not strategies or invalid:
+        raise typer.BadParameter("split strategies must be random and/or scaffold")
+    return strategies
+
+
+@app.command("compare-splits")
+def compare_splits(
+    dataset_name: Annotated[str, typer.Argument(help="Registered dataset name.")],
+    output_dir: Annotated[Path, typer.Argument(help="Comparison artifact directory.")],
+    seeds: Annotated[str, typer.Option(help="Comma-separated random seeds.")] = "42,43,44",
+    split_strategies: Annotated[
+        str,
+        typer.Option(help="Comma-separated split strategies."),
+    ] = "random,scaffold",
+    overwrite: Annotated[
+        bool,
+        typer.Option(help="Replace cached benchmark artifacts."),
+    ] = False,
+) -> None:
+    """Compare fingerprint baselines across split strategies and seeds."""
+    summary = run_split_comparison(
+        dataset_name,
+        output_dir,
+        seeds=_parse_seeds(seeds),
+        split_strategies=_parse_split_strategies(split_strategies),
+        overwrite=overwrite,
+    )
+
+    console.print("[bold]Completed split comparison[/bold]")
+    for strategy, values in summary["by_split_strategy"].items():
+        console.print(
+            f"{strategy}: mean test {values['key_metric']}="
+            f"{values['mean_test_metric']} (n={values['n_runs']})"
+        )
+    console.print(f"Metrics: {summary['comparison_metrics_csv']}")
+    console.print(f"Summary: {summary['comparison_summary_json']}")
+    console.print(f"Report: {summary['comparison_report_md']}")
 
 
 if __name__ == "__main__":

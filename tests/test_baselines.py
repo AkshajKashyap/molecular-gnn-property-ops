@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from molgnn_ops.baselines import infer_task_type, train_fingerprint_baseline
-from molgnn_ops.reporting import write_markdown_report
+from molgnn_ops.reporting import write_diagnostics_report, write_markdown_report
 
 
 def _write_fingerprint_dataset(path: Path, task_type: str) -> None:
@@ -107,3 +107,36 @@ def test_saved_metrics_are_valid_json(tmp_path: Path) -> None:
 
     with (output_dir / "metrics.json").open(encoding="utf-8") as metrics_file:
         assert json.load(metrics_file)["task_type"] == "classification"
+
+
+def test_write_diagnostics_report(tmp_path: Path) -> None:
+    output_path = tmp_path / "diagnostics.md"
+    diagnostics = {
+        "target_distribution": {"test": {"count": 2, "mean": 1.5}},
+        "prediction_errors": {"test": {"n": 2, "mae": 0.4, "rmse": 0.5}},
+        "worst_test_predictions": [
+            {
+                "smiles": "CCO",
+                "y_true": 1.0,
+                "y_pred": 1.7,
+                "error": 0.7,
+                "absolute_error": 0.7,
+            }
+        ],
+        "scaffold_distribution": {
+            "n_unique_scaffolds": 2,
+            "largest_scaffold_group_size": 3,
+            "median_scaffold_group_size": 2.0,
+            "n_singleton_scaffolds": 1,
+            "top_10_scaffold_groups": [{"scaffold": "ring", "size": 3}],
+        },
+        "train_test_similarity": {"mean_max_similarity": 0.45},
+        "plots": {"target_distribution": "figures/targets.png"},
+    }
+
+    write_diagnostics_report(diagnostics, output_path)
+    report = output_path.read_text(encoding="utf-8")
+
+    assert "# Benchmark Diagnostics Report" in report
+    assert "## Worst Test Predictions" in report
+    assert "figures/targets.png" in report

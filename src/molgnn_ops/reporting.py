@@ -54,3 +54,113 @@ def write_markdown_report(metrics: dict, output_path: Path, title: str) -> None:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _markdown_table(headers: list[str], rows: list[list[object]]) -> list[str]:
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    lines.extend(
+        "| " + " | ".join(_format_metric(value) for value in row) + " |"
+        for row in rows
+    )
+    return lines
+
+
+def write_diagnostics_report(
+    diagnostics: dict,
+    output_path: Path,
+    title: str = "Benchmark Diagnostics Report",
+) -> None:
+    """Write an inspectable Markdown report from benchmark diagnostics."""
+    target_summaries = diagnostics.get("target_distribution", {})
+    prediction_summaries = diagnostics.get("prediction_errors", {})
+    worst_rows = diagnostics.get("worst_test_predictions", [])
+    scaffolds = diagnostics.get("scaffold_distribution", {})
+    similarity = diagnostics.get("train_test_similarity", {})
+    plots = diagnostics.get("plots", {})
+
+    lines = [f"# {title}", "", "## Target Distribution by Split", ""]
+    target_metrics = ["count", "mean", "std", "min", "max", "median", "q25", "q75"]
+    lines.extend(
+        _markdown_table(
+            ["Split", *target_metrics],
+            [
+                [split_name, *(summary.get(metric) for metric in target_metrics)]
+                for split_name, summary in target_summaries.items()
+            ],
+        )
+    )
+
+    lines.extend(["", "## Prediction Error Summary", ""])
+    error_metrics = ["n", "mae", "rmse", "mean_error", "median_abs_error", "max_abs_error"]
+    lines.extend(
+        _markdown_table(
+            ["Split", *error_metrics],
+            [
+                [split_name, *(summary.get(metric) for metric in error_metrics)]
+                for split_name, summary in prediction_summaries.items()
+            ],
+        )
+    )
+
+    lines.extend(["", "## Worst Test Predictions", ""])
+    worst_columns = ["smiles", "y_true", "y_pred", "error", "absolute_error"]
+    lines.extend(
+        _markdown_table(
+            ["SMILES", "Actual", "Predicted", "Error", "Absolute error"],
+            [
+                [f"`{row.get('smiles')}`", *(row.get(column) for column in worst_columns[1:])]
+                for row in worst_rows
+            ],
+        )
+    )
+
+    lines.extend(
+        [
+            "",
+            "## Scaffold Distribution",
+            "",
+            f"- Unique scaffolds: {_format_metric(scaffolds.get('n_unique_scaffolds'))}",
+            "- Largest scaffold group: "
+            f"{_format_metric(scaffolds.get('largest_scaffold_group_size'))}",
+            "- Median scaffold group size: "
+            f"{_format_metric(scaffolds.get('median_scaffold_group_size'))}",
+            f"- Singleton scaffolds: {_format_metric(scaffolds.get('n_singleton_scaffolds'))}",
+            "",
+        ]
+    )
+    top_scaffolds = scaffolds.get("top_10_scaffold_groups", [])
+    lines.extend(
+        _markdown_table(
+            ["Scaffold", "Size"],
+            [[f"`{row.get('scaffold')}`", row.get("size")] for row in top_scaffolds],
+        )
+    )
+
+    lines.extend(["", "## Train-Test Similarity", ""])
+    for metric_name, value in similarity.items():
+        lines.append(f"- {metric_name}: {_format_metric(value)}")
+
+    lines.extend(["", "## Figures", ""])
+    for plot_name, relative_path in plots.items():
+        label = str(plot_name).replace("_", " ").title()
+        lines.append(f"![{label}]({relative_path})")
+
+    lines.extend(
+        [
+            "",
+            "## Interpretation",
+            "",
+            "These diagnostics describe this split and model run; they do not establish causal "
+            "relationships. Differences in target distributions, scaffold frequencies, or "
+            "train-test similarity may help explain performance, but should be checked across "
+            "multiple seeds. Lower test-to-train similarity can make a split more challenging, "
+            "while individual large errors may reflect both model limitations and unusual "
+            "molecules.",
+        ]
+    )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

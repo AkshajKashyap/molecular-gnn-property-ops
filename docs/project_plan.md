@@ -37,12 +37,19 @@
 - Reproducible seed-specific benchmark artifact directories
 - Network-free unit tests and a repeatable shell entry point
 
+### Milestone 6: Benchmark diagnostics and split comparison
+
+- Target, prediction-error, scaffold, and train-test similarity diagnostics
+- Inspectable matplotlib figures and Markdown diagnostics report
+- Multi-seed random versus scaffold fingerprint baseline comparison
+- Reproducible diagnostic and comparison shell entry points
+
 ## Future milestones
 
-6. GCN/GIN/MPNN models.
-7. Random split vs scaffold split model evaluation.
-8. Calibration and uncertainty analysis.
-9. Error analysis reports.
-10. FastAPI inference endpoint.
-11. Streamlit molecule explorer.
-12. Docker, CI, and final portfolio polish.
+7. GCN/GIN/MPNN models.
+8. Random split vs scaffold split GNN evaluation.
+9. Calibration and uncertainty analysis.
+10. Extended error analysis reports.
+11. FastAPI inference endpoint.
+12. Streamlit molecule explorer.
+13. Docker, CI, and final portfolio polish.

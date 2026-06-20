@@ -174,3 +174,74 @@ def test_run_fingerprint_benchmark_command_smoke(tmp_path: Path, monkeypatch) ->
     assert result.exit_code == 0
     assert "Best model: ridge" in result.output
     assert "Test rmse: 0.6" in result.output
+
+
+def test_diagnose_benchmark_command_smoke(tmp_path: Path) -> None:
+    from molgnn_ops.cli import app
+
+    prepared_csv = tmp_path / "prepared.csv"
+    predictions_csv = tmp_path / "predictions.csv"
+    output_dir = tmp_path / "diagnostics"
+    pd.DataFrame(
+        {
+            "smiles": ["CCO", "CCN", "c1ccccc1", "CCCl", "c1ccccc1O"],
+            "target": [1.0, 2.0, 3.0, 1.5, 3.5],
+            "split": ["train", "train", "train", "test", "test"],
+        }
+    ).to_csv(prepared_csv, index=False)
+    pd.DataFrame(
+        {
+            "smiles": ["CCCl", "c1ccccc1O"],
+            "split": ["test", "test"],
+            "y_true": [1.5, 3.5],
+            "y_pred": [1.8, 3.0],
+        }
+    ).to_csv(predictions_csv, index=False)
+
+    result = CliRunner().invoke(
+        app,
+        ["diagnose-benchmark", str(prepared_csv), str(predictions_csv), str(output_dir)],
+    )
+
+    assert result.exit_code == 0
+    assert "Test RMSE:" in result.output
+    assert (output_dir / "diagnostics.json").is_file()
+    assert (output_dir / "diagnostics_report.md").is_file()
+
+
+def test_compare_splits_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    summary = {
+        "by_split_strategy": {
+            "random": {"key_metric": "rmse", "mean_test_metric": 0.8, "n_runs": 2},
+            "scaffold": {"key_metric": "rmse", "mean_test_metric": 1.2, "n_runs": 2},
+        },
+        "comparison_metrics_csv": str(tmp_path / "comparison_metrics.csv"),
+        "comparison_summary_json": str(tmp_path / "comparison_summary.json"),
+        "comparison_report_md": str(tmp_path / "comparison_report.md"),
+    }
+    captured = {}
+
+    def fake_comparison(*args, **kwargs):
+        captured.update(kwargs)
+        return summary
+
+    monkeypatch.setattr(cli_module, "run_split_comparison", fake_comparison)
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "compare-splits",
+            "esol",
+            str(tmp_path),
+            "--seeds",
+            "42,43",
+            "--split-strategies",
+            "random,scaffold",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["seeds"] == [42, 43]
+    assert captured["split_strategies"] == ["random", "scaffold"]
+    assert "scaffold: mean test rmse=1.2" in result.output

@@ -9,6 +9,7 @@ description = "Molecular property prediction with graph neural networks, scaffol
 requires-python = ">=3.11"
 dependencies = [
     "joblib>=1.4",
+    "matplotlib>=3.8",
     "numpy>=1.26",
     "pandas>=2.2",
     "pydantic>=2.7",
