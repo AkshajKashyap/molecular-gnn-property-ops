@@ -5,7 +5,11 @@ import numpy as np
 import pandas as pd
 
 from molgnn_ops.baselines import infer_task_type, train_fingerprint_baseline
-from molgnn_ops.reporting import write_diagnostics_report, write_markdown_report
+from molgnn_ops.reporting import (
+    write_diagnostics_report,
+    write_gnn_uncertainty_report,
+    write_markdown_report,
+)
 
 
 def _write_fingerprint_dataset(path: Path, task_type: str) -> None:
@@ -140,3 +144,79 @@ def test_write_diagnostics_report(tmp_path: Path) -> None:
     assert "# Benchmark Diagnostics Report" in report
     assert "## Worst Test Predictions" in report
     assert "figures/targets.png" in report
+
+
+def test_write_gnn_uncertainty_report(tmp_path: Path) -> None:
+    summary = {
+        "ensemble_members": 3,
+        "seeds": [42, 43, 44],
+        "ensemble_test_metrics": {"rmse": 1.0, "mae": 0.8, "r2": 0.5},
+        "interval_results": [
+            {
+                "target_coverage": 0.9,
+                "interval_scale": 2.0,
+                "empirical_coverage": 0.88,
+                "mean_interval_width": 2.5,
+                "median_interval_width": 2.2,
+            }
+        ],
+        "uncertainty_error_correlations": {"pearson": 0.4, "spearman": 0.5},
+        "selective_prediction": [
+            {
+                "retained_fraction": 1.0,
+                "n_retained": 4,
+                "rmse": 1.0,
+                "mae": 0.8,
+                "mean_uncertainty": 0.3,
+            }
+        ],
+        "uncertainty_buckets": [
+            {
+                "bucket": "low",
+                "n": 4,
+                "mean_uncertainty": 0.3,
+                "rmse": 1.0,
+                "mae": 0.8,
+                "empirical_coverage": 0.88,
+            }
+        ],
+        "worst_predictions": [
+            {
+                "smiles": "CCO",
+                "y_true": 1.0,
+                "ensemble_mean": 0.0,
+                "ensemble_std": 0.3,
+                "absolute_error": 1.0,
+                "interval_lower": -0.6,
+                "interval_upper": 0.6,
+                "covered": False,
+                "molecular_weight": 46.1,
+                "heavy_atom_count": 3,
+                "ring_count": 0,
+                "rotatable_bond_count": 0,
+                "heteroatom_count": 1,
+            }
+        ],
+        "descriptor_error_summary": {
+            "molecular_weight": [
+                {
+                    "group": "low",
+                    "n": 4,
+                    "rmse": 1.0,
+                    "mae": 0.8,
+                    "mean_uncertainty": 0.3,
+                    "empirical_coverage": 0.88,
+                }
+            ]
+        },
+        "plots": {"interval_coverage": "figures/coverage.png"},
+    }
+    output_path = tmp_path / "uncertainty.md"
+
+    write_gnn_uncertainty_report(summary, output_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "# GNN Ensemble Uncertainty Report" in content
+    assert "## Selective Prediction" in content
+    assert "## Limitations" in content
+    assert "may not maintain nominal coverage" in content

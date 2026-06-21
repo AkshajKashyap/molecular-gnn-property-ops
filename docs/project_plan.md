@@ -58,9 +58,16 @@
 - Optional nearby fingerprint baseline integration
 - Inspectable CSV, JSON, Markdown, and matplotlib comparison artifacts
 
+### Milestone 9: GNN uncertainty and molecular error analysis
+
+- GNN ensemble mean and disagreement-based uncertainty
+- Validation-calibrated regression prediction intervals
+- Empirical coverage, interval width, and selective prediction evaluation
+- Descriptor groups, uncertainty buckets, and worst-prediction analysis
+
 ## Future milestones
 
-9. Uncertainty and calibration analysis.
-10. Extended GNN error analysis reports.
-11. FastAPI inference endpoint and Streamlit molecule explorer.
-12. Docker, CI, and final portfolio polish.
+10. Inference API.
+11. Interactive dashboard.
+12. Docker and CI.
+13. Final model card and portfolio documentation.

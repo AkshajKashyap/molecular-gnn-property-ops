@@ -360,3 +360,71 @@ def test_compare_gnns_command_smoke(tmp_path: Path, monkeypatch) -> None:
     assert captured["model_names"] == ["gcn", "gin"]
     assert captured["seeds"] == [42, 43]
     assert "Best mean model: gcn" in result.output
+
+
+def test_analyze_gnn_uncertainty_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    captured = {}
+
+    def fake_analysis(prediction_paths, output_dir, target_coverages):
+        captured["prediction_paths"] = prediction_paths
+        captured["output_dir"] = output_dir
+        captured["target_coverages"] = target_coverages
+        return {
+            "ensemble_test_metrics": {"rmse": 1.1},
+            "interval_results": [
+                {
+                    "target_coverage": 0.9,
+                    "empirical_coverage": 0.87,
+                    "mean_interval_width": 2.4,
+                }
+            ],
+            "uncertainty_error_correlations": {"pearson": 0.4, "spearman": 0.5},
+            "artifacts": {
+                "uncertainty_summary_json": str(tmp_path / "summary.json"),
+                "uncertainty_report_md": str(tmp_path / "report.md"),
+            },
+        }
+
+    monkeypatch.setattr(cli_module, "run_gnn_uncertainty_analysis", fake_analysis)
+    paths = [tmp_path / "run_1.csv", tmp_path / "run_2.csv"]
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "analyze-gnn-uncertainty",
+            str(tmp_path / "output"),
+            *(str(path) for path in paths),
+            "--target-coverages",
+            "0.8,0.9",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["prediction_paths"] == paths
+    assert captured["target_coverages"] == [0.8, 0.9]
+    assert "Ensemble test RMSE: 1.1000" in result.output
+
+
+def test_analyze_gnn_uncertainty_command_reports_alignment_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from molgnn_ops import cli as cli_module
+
+    def fail_analysis(*args, **kwargs):
+        raise ValueError("prediction molecules do not match")
+
+    monkeypatch.setattr(cli_module, "run_gnn_uncertainty_analysis", fail_analysis)
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "analyze-gnn-uncertainty",
+            str(tmp_path / "output"),
+            str(tmp_path / "one.csv"),
+            str(tmp_path / "two.csv"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Uncertainty analysis failed: prediction molecules do not match" in result.output
+    assert "Traceback" not in result.output

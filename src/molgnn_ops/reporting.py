@@ -213,3 +213,185 @@ def write_gnn_report(metrics: dict, output_path: Path) -> None:
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_gnn_uncertainty_report(
+    summary: dict,
+    output_path: Path,
+    title: str = "GNN Ensemble Uncertainty Report",
+) -> None:
+    """Write an uncertainty and molecular error-analysis report."""
+    test_metrics = summary["ensemble_test_metrics"]
+    correlations = summary["uncertainty_error_correlations"]
+    lines = [
+        f"# {title}",
+        "",
+        f"- Ensemble members: {summary['ensemble_members']}",
+        f"- Seeds: {', '.join(str(seed) for seed in summary['seeds'])}",
+        "- Interval calibration split: `validation`",
+        "- Interval evaluation split: `test`",
+        "",
+        "## Ensemble Test Metrics",
+        "",
+        f"- RMSE: {_format_metric(test_metrics.get('rmse'))}",
+        f"- MAE: {_format_metric(test_metrics.get('mae'))}",
+        f"- R2: {_format_metric(test_metrics.get('r2'))}",
+        "",
+        "## Validation-Calibrated Prediction Intervals",
+        "",
+    ]
+    lines.extend(
+        _markdown_table(
+            [
+                "Target coverage",
+                "Interval scale",
+                "Test coverage",
+                "Mean width",
+                "Median width",
+            ],
+            [
+                [
+                    row["target_coverage"],
+                    row["interval_scale"],
+                    row["empirical_coverage"],
+                    row["mean_interval_width"],
+                    row["median_interval_width"],
+                ]
+                for row in summary["interval_results"]
+            ],
+        )
+    )
+    lines.extend(
+        [
+            "",
+            "These are ensemble-disagreement intervals scaled on validation residuals. They "
+            "are not guaranteed confidence intervals.",
+            "",
+            "## Uncertainty-Error Correlation",
+            "",
+            f"- Pearson: {_format_metric(correlations.get('pearson'))}",
+            f"- Spearman-style rank: {_format_metric(correlations.get('spearman'))}",
+            "",
+            "## Selective Prediction",
+            "",
+        ]
+    )
+    lines.extend(
+        _markdown_table(
+            ["Retained fraction", "N", "RMSE", "MAE", "Mean uncertainty"],
+            [
+                [
+                    row["retained_fraction"],
+                    row["n_retained"],
+                    row["rmse"],
+                    row["mae"],
+                    row["mean_uncertainty"],
+                ]
+                for row in summary["selective_prediction"]
+            ],
+        )
+    )
+    lines.extend(["", "## Uncertainty Buckets", ""])
+    lines.extend(
+        _markdown_table(
+            ["Bucket", "N", "Mean uncertainty", "RMSE", "MAE", "Coverage"],
+            [
+                [
+                    row["bucket"],
+                    row["n"],
+                    row["mean_uncertainty"],
+                    row["rmse"],
+                    row["mae"],
+                    row["empirical_coverage"],
+                ]
+                for row in summary["uncertainty_buckets"]
+            ],
+        )
+    )
+    lines.extend(["", "## Worst Ensemble Predictions", ""])
+    lines.extend(
+        _markdown_table(
+            [
+                "SMILES",
+                "Actual",
+                "Mean",
+                "Std",
+                "Absolute error",
+                "Lower",
+                "Upper",
+                "Covered",
+                "Mol. weight",
+                "Heavy atoms",
+                "Rings",
+                "Rotatable bonds",
+                "Heteroatoms",
+            ],
+            [
+                [
+                    f"`{row['smiles']}`",
+                    row["y_true"],
+                    row["ensemble_mean"],
+                    row["ensemble_std"],
+                    row["absolute_error"],
+                    row["interval_lower"],
+                    row["interval_upper"],
+                    row["covered"],
+                    row["molecular_weight"],
+                    row["heavy_atom_count"],
+                    row["ring_count"],
+                    row["rotatable_bond_count"],
+                    row["heteroatom_count"],
+                ]
+                for row in summary["worst_predictions"]
+            ],
+        )
+    )
+
+    lines.extend(["", "## Descriptor-Based Error Summary", ""])
+    for descriptor_name, groups in summary["descriptor_error_summary"].items():
+        lines.extend([f"### {descriptor_name.replace('_', ' ').title()}", ""])
+        lines.extend(
+            _markdown_table(
+                ["Quantile group", "N", "RMSE", "MAE", "Mean uncertainty", "Coverage"],
+                [
+                    [
+                        group["group"],
+                        group["n"],
+                        group["rmse"],
+                        group["mae"],
+                        group["mean_uncertainty"],
+                        group["empirical_coverage"],
+                    ]
+                    for group in groups
+                ],
+            )
+        )
+        lines.append("")
+    lines.extend(
+        [
+            "Descriptor groups are descriptive associations and do not establish causal "
+            "relationships.",
+            "",
+            "## Figures",
+            "",
+        ]
+    )
+    for plot_name, plot_path in summary["plots"].items():
+        label = plot_name.replace("_", " ").title()
+        lines.append(f"![{label}]({plot_path})")
+
+    lines.extend(
+        [
+            "",
+            "## Limitations",
+            "",
+            "- Ensemble disagreement captures only part of predictive uncertainty.",
+            "- Three models are a small ensemble.",
+            "- Validation-calibrated intervals may not maintain nominal coverage under "
+            "distribution shift.",
+            "- ESOL is a small dataset.",
+            "- The scaffold split is intentionally difficult.",
+        ]
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

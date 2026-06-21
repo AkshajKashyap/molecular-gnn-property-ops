@@ -17,6 +17,8 @@ workflow using ESOL/Delaney. Milestone 6 adds benchmark diagnostics and seeded s
 comparison. Milestone 7 adds the first small GCN and GIN molecular graph baselines.
 Milestone 8 compares those architectures across repeated seeds and reports their
 aggregate performance alongside the fingerprint baseline when it is available.
+Milestone 9 adds validation-calibrated GNN ensemble uncertainty and molecular error
+analysis without treating the resulting intervals as formal guarantees.
 
 ## Milestone 2 Splits
 
@@ -100,6 +102,25 @@ and writes CSV, JSON, Markdown, and matplotlib figures. It reports mean and stan
 for test RMSE, MAE, and R2 without hiding weak GIN results or unstable seeds. When nearby
 fingerprint split-comparison metrics exist, the report includes them in a separate baseline
 section.
+
+## Milestone 9 GNN Uncertainty and Error Analysis
+
+A deep ensemble averages predictions from repeated GCN runs. The ensemble mean is the point
+prediction, while the sample standard deviation across members measures model disagreement as
+a practical estimate of epistemic uncertainty. Ensemble disagreement captures only part of
+predictive uncertainty, especially with just three models.
+
+Regression prediction intervals are calibrated on validation residuals by scaling ensemble
+disagreement to target empirical coverage levels. They are evaluated on test molecules using
+empirical coverage and mean interval width (sharpness), not classification reliability
+diagrams. These validation-calibrated intervals are not guaranteed confidence intervals and
+may lose nominal coverage under scaffold or other distribution shifts.
+
+Selective prediction sorts test molecules from lowest to highest uncertainty and reports the
+RMSE obtained when retaining 25%, 50%, 75%, or 100% of predictions. Molecular descriptor
+groups, uncertainty buckets, and the largest ensemble errors provide descriptive failure
+analysis without claiming causal relationships. Every ensemble member must contain the same
+validation and test molecule keys and targets.
 
 ## Installation
 
@@ -256,3 +277,26 @@ The reproducible wrapper runs the same command:
 ```bash
 bash scripts/run_esol_gnn_comparison.sh
 ```
+
+Analyze repeated GCN prediction files as an uncertainty ensemble:
+
+```bash
+molgnn-ops analyze-gnn-uncertainty \
+  artifacts/benchmarks/esol/gnn_uncertainty \
+  artifacts/benchmarks/esol/gnn_comparison/gcn/seed_42/training/predictions.csv \
+  artifacts/benchmarks/esol/gnn_comparison/gcn/seed_43/training/predictions.csv \
+  artifacts/benchmarks/esol/gnn_comparison/gcn/seed_44/training/predictions.csv \
+  --target-coverages 0.80,0.90,0.95
+```
+
+The reproducible ESOL wrapper validates every input file before running:
+
+```bash
+bash scripts/run_esol_gcn_uncertainty.sh
+```
+
+The currently generated Milestone 8 files use seed-dependent scaffold partitions and ESOL
+also contains duplicate `(smiles, split)` keys, including conflicting target measurements.
+The strict ensemble loader rejects those legacy artifacts instead of silently intersecting or
+deduplicating the test set. A real uncertainty report therefore requires ensemble members
+trained with different initialization seeds on one fixed, unambiguous prepared split.

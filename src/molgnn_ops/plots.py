@@ -151,3 +151,100 @@ def plot_gnn_metric_by_seed(
     axis.set_ylabel(metric.replace("_", " ").title())
     axis.legend()
     _save_figure(figure, output_path)
+
+
+def plot_uncertainty_vs_error(predictions_csv: Path, output_path: Path) -> None:
+    """Plot ensemble disagreement against absolute prediction error."""
+    dataframe = pd.read_csv(predictions_csv)
+    required = {"ensemble_std", "absolute_error"}
+    if not required <= set(dataframe.columns):
+        raise ValueError("Predictions CSV must contain ensemble_std and absolute_error")
+    if "split" in dataframe and (dataframe["split"] == "test").any():
+        dataframe = dataframe[dataframe["split"] == "test"]
+
+    plt = _get_pyplot()
+    figure, axis = plt.subplots(figsize=(7, 5))
+    axis.scatter(dataframe["ensemble_std"], dataframe["absolute_error"], alpha=0.7)
+    axis.set_title("Ensemble Uncertainty vs Absolute Error")
+    axis.set_xlabel("Ensemble standard deviation")
+    axis.set_ylabel("Absolute error")
+    _save_figure(figure, output_path)
+
+
+def plot_interval_coverage(
+    coverage_results: pd.DataFrame | Path,
+    output_path: Path,
+) -> None:
+    """Plot nominal regression interval coverage against empirical coverage."""
+    dataframe = (
+        pd.read_csv(coverage_results)
+        if isinstance(coverage_results, Path)
+        else coverage_results.copy()
+    )
+    required = {"target_coverage", "empirical_coverage"}
+    if not required <= set(dataframe.columns):
+        raise ValueError(
+            "Coverage results must contain target_coverage and empirical_coverage"
+        )
+    ordered = dataframe.sort_values("target_coverage")
+
+    plt = _get_pyplot()
+    figure, axis = plt.subplots(figsize=(6, 6))
+    axis.plot(
+        ordered["target_coverage"],
+        ordered["empirical_coverage"],
+        marker="o",
+        label="Empirical test coverage",
+    )
+    limits = [0.0, 1.0]
+    axis.plot(limits, limits, linestyle="--", label="Nominal coverage")
+    axis.set_xlim(limits)
+    axis.set_ylim(limits)
+    axis.set_title("Regression Prediction Interval Coverage")
+    axis.set_xlabel("Target coverage")
+    axis.set_ylabel("Empirical test coverage")
+    axis.legend()
+    _save_figure(figure, output_path)
+
+
+def plot_selective_prediction_curve(
+    selective_metrics_csv: Path,
+    output_path: Path,
+) -> None:
+    """Plot RMSE as increasingly uncertain predictions are retained."""
+    dataframe = pd.read_csv(selective_metrics_csv)
+    required = {"retained_fraction", "rmse"}
+    if not required <= set(dataframe.columns):
+        raise ValueError("Selective metrics CSV must contain retained_fraction and rmse")
+    ordered = dataframe.sort_values("retained_fraction")
+
+    plt = _get_pyplot()
+    figure, axis = plt.subplots(figsize=(7, 5))
+    axis.plot(ordered["retained_fraction"], ordered["rmse"], marker="o")
+    axis.set_title("Selective Prediction Performance")
+    axis.set_xlabel("Retained fraction (least uncertain first)")
+    axis.set_ylabel("RMSE")
+    axis.set_xlim(0.0, 1.0)
+    _save_figure(figure, output_path)
+
+
+def plot_uncertainty_buckets(
+    bucket_summary_csv: Path,
+    output_path: Path,
+) -> None:
+    """Plot RMSE for low, medium, and high ensemble-uncertainty buckets."""
+    dataframe = pd.read_csv(bucket_summary_csv)
+    required = {"bucket", "rmse"}
+    if not required <= set(dataframe.columns):
+        raise ValueError("Bucket summary CSV must contain bucket and rmse")
+    order = ["low", "medium", "high"]
+    dataframe["bucket"] = pd.Categorical(dataframe["bucket"], order, ordered=True)
+    ordered = dataframe.sort_values("bucket")
+
+    plt = _get_pyplot()
+    figure, axis = plt.subplots(figsize=(7, 5))
+    axis.bar(ordered["bucket"].astype(str), ordered["rmse"])
+    axis.set_title("Error by Ensemble-Uncertainty Bucket")
+    axis.set_xlabel("Uncertainty bucket")
+    axis.set_ylabel("RMSE")
+    _save_figure(figure, output_path)

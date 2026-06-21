@@ -24,7 +24,11 @@ from molgnn_ops.gnn_compare import run_gnn_comparison
 from molgnn_ops.paths import ARTIFACTS_DIR, ensure_project_dirs
 from molgnn_ops.prep import prepare_dataset
 from molgnn_ops.reporting import write_diagnostics_report
-from molgnn_ops.workflows import run_fingerprint_benchmark, run_gnn_benchmark
+from molgnn_ops.workflows import (
+    run_fingerprint_benchmark,
+    run_gnn_benchmark,
+    run_gnn_uncertainty_analysis,
+)
 
 app = typer.Typer(help="Utilities for the molecular property prediction project.")
 console = Console()
@@ -319,6 +323,20 @@ def _parse_model_names(value: str) -> list[str]:
     return model_names
 
 
+def _parse_target_coverages(value: str) -> list[float]:
+    try:
+        coverages = [float(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as error:
+        raise typer.BadParameter(
+            "target coverages must be comma-separated numbers"
+        ) from error
+    if not coverages or any(not 0 < coverage < 1 for coverage in coverages):
+        raise typer.BadParameter("target coverages must be between 0 and 1")
+    if len(set(coverages)) != len(coverages):
+        raise typer.BadParameter("target coverages must not contain duplicates")
+    return coverages
+
+
 def _parse_split_strategies(value: str) -> list[str]:
     strategies = [item.strip().lower() for item in value.split(",") if item.strip()]
     invalid = sorted(set(strategies).difference({"random", "scaffold"}))
@@ -493,6 +511,49 @@ def compare_gnns(
     console.print(f"Metrics: {summary['comparison_metrics_csv']}")
     console.print(f"Summary: {summary['comparison_summary_json']}")
     console.print(f"Report: {summary['comparison_report_md']}")
+
+
+@app.command("analyze-gnn-uncertainty")
+def analyze_gnn_uncertainty(
+    output_dir: Annotated[Path, typer.Argument(help="Uncertainty artifact directory.")],
+    prediction_paths: Annotated[
+        list[Path],
+        typer.Argument(help="Prediction CSVs from repeated GNN runs."),
+    ],
+    target_coverages: Annotated[
+        str,
+        typer.Option(help="Comma-separated target interval coverages."),
+    ] = "0.80,0.90,0.95",
+) -> None:
+    """Analyze uncertainty and molecular errors for a GNN ensemble."""
+    if len(prediction_paths) < 2:
+        raise typer.BadParameter(
+            "at least two prediction files are required",
+            param_hint="PREDICTION_PATHS",
+        )
+    try:
+        summary = run_gnn_uncertainty_analysis(
+            prediction_paths,
+            output_dir,
+            target_coverages=_parse_target_coverages(target_coverages),
+        )
+    except (FileNotFoundError, ValueError) as error:
+        typer.echo(f"Uncertainty analysis failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    interval_90 = next(
+        row
+        for row in summary["interval_results"]
+        if abs(row["target_coverage"] - 0.90) < 1e-9
+    )
+    correlations = summary["uncertainty_error_correlations"]
+    console.print("[bold]Completed GNN ensemble uncertainty analysis[/bold]")
+    console.print(f"Ensemble test RMSE: {summary['ensemble_test_metrics']['rmse']:.4f}")
+    console.print(f"90% interval test coverage: {interval_90['empirical_coverage']:.4f}")
+    console.print(f"90% interval mean width: {interval_90['mean_interval_width']:.4f}")
+    console.print(f"Uncertainty-error Pearson: {correlations['pearson']}")
+    console.print(f"Uncertainty-error rank correlation: {correlations['spearman']}")
+    console.print(f"Summary: {summary['artifacts']['uncertainty_summary_json']}")
+    console.print(f"Report: {summary['artifacts']['uncertainty_report_md']}")
 
 
 if __name__ == "__main__":
