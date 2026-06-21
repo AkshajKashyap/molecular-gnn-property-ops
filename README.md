@@ -21,6 +21,7 @@ Milestone 9 adds validation-calibrated GNN ensemble uncertainty and molecular er
 analysis without treating the resulting intervals as formal guarantees.
 Milestone 9.5 completes that work with stable sample identity and multiple GCNs trained
 against one immutable scaffold split.
+Milestone 10 adds validation-only model promotion and FastAPI molecular solubility inference.
 
 ## Milestone 2 Splits
 
@@ -143,6 +144,25 @@ SMILES are propagated through prepared CSV, graph JSONL, PyG metadata, and predi
 Duplicate measurements remain separate and are audited; conflicting targets are never
 silently removed or averaged.
 
+## Milestone 10 Model Promotion and FastAPI Inference
+
+Promotion ranks candidate training runs using validation metrics only. Test performance is
+copied into the manifest after selection for final reporting, but it never influences which
+checkpoint is deployed. The promoted package contains its own checkpoint, architecture and
+feature dimensions, normalization metadata, candidate ranking, and selection report, so it
+does not depend on the original training directory.
+
+The API accepts one SMILES string or an ordered batch of up to 100 entries. It canonicalizes
+valid molecules, predicts ESOL log solubility, and converts that result to molar solubility.
+Invalid batch entries return individual errors without failing valid entries. Model metadata,
+validation metrics, post-selection test metrics, split seeds, and limitations are available
+from `/model`; internal filesystem paths are not exposed.
+
+The earlier ensemble analysis found that disagreement did not rank ESOL errors reliably and
+required very wide intervals for coverage. This API therefore exposes no uncertainty value.
+It is a research and portfolio service, not a medical, pharmaceutical, laboratory-grade, or
+safety-critical prediction system.
+
 ## Installation
 
 Create and activate a Python 3.11+ virtual environment, then install the project in editable
@@ -158,6 +178,12 @@ extra:
 ```bash
 python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -e ".[gnn]"
+```
+
+Install the GNN and API extras together for model serving:
+
+```bash
+python -m pip install -e ".[gnn,api]"
 ```
 
 ## Tests and Linting
@@ -342,3 +368,41 @@ The reproducible wrapper runs the same workflow:
 ```bash
 bash scripts/run_esol_fixed_split_gcn_ensemble.sh
 ```
+
+Promote the fixed-split candidate with the best validation RMSE:
+
+```bash
+bash scripts/promote_esol_gcn.sh
+```
+
+Run one CLI prediction:
+
+```bash
+molgnn-ops predict-smiles \
+  artifacts/registry/esol-gcn-v1/manifest.json \
+  "CCO"
+```
+
+Serve the promoted model on port 8000:
+
+```bash
+bash scripts/serve_esol_api.sh
+```
+
+Inspect health and public model metadata:
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/model
+```
+
+Request a prediction:
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"smiles":"CCO"}'
+```
+
+Batch prediction is available at `POST /predict/batch` with a JSON body such as
+`{"smiles":["CCO","CCN","invalid"]}`.

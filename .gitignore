@@ -9,6 +9,7 @@ data/interim/
 data/processed/
 artifacts/models/
 artifacts/benchmarks/
+artifacts/registry/
 *.pt
 *.pth
 *.ckpt

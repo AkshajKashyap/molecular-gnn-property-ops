@@ -489,3 +489,100 @@ def test_run_fixed_split_ensemble_command_smoke(tmp_path: Path, monkeypatch) -> 
     assert captured["split_seed"] == 42
     assert captured["model_seeds"] == [42, 43]
     assert "Ensemble test RMSE: 0.9000" in result.output
+
+
+def test_promote_model_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from molgnn_ops import cli as cli_module
+
+    captured = {}
+
+    def fake_promote(candidate_run_dirs, registry_dir, model_id, metric):
+        captured["candidate_run_dirs"] = candidate_run_dirs
+        captured["registry_dir"] = registry_dir
+        captured["model_id"] = model_id
+        captured["metric"] = metric
+        return SimpleNamespace(
+            model_id=model_id,
+            model_seed=43,
+            validation_metrics={"rmse": 1.2},
+            test_metrics={"rmse": 1.4},
+        )
+
+    monkeypatch.setattr(cli_module, "promote_model", fake_promote)
+    candidates = [tmp_path / "seed_42", tmp_path / "seed_43"]
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "promote-model",
+            str(tmp_path / "registry"),
+            *(str(path) for path in candidates),
+            "--model-id",
+            "esol-gcn-v1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["candidate_run_dirs"] == candidates
+    assert captured["metric"] == "rmse"
+    assert "Selected model seed: 43" in result.output
+
+
+def test_predict_smiles_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+    from molgnn_ops import inference
+
+    monkeypatch.setattr(inference, "load_promoted_model", lambda path: object())
+    monkeypatch.setattr(
+        inference,
+        "predict_smiles",
+        lambda smiles, model: {
+            "canonical_smiles": "CCO",
+            "predicted_log_solubility": -0.7,
+            "predicted_solubility_mol_per_litre": 0.2,
+            "model_id": "esol-gcn-v1",
+            "warnings": ["Research model."],
+        },
+    )
+    result = CliRunner().invoke(
+        cli_module.app,
+        ["predict-smiles", str(tmp_path / "manifest.json"), "OCC"],
+    )
+
+    assert result.exit_code == 0
+    assert "Canonical SMILES: CCO" in result.output
+    assert "Predicted log solubility: -0.700000" in result.output
+    assert "Model ID: esol-gcn-v1" in result.output
+
+
+def test_serve_api_command_imports_and_runs(tmp_path: Path, monkeypatch) -> None:
+    import uvicorn
+
+    from molgnn_ops import api as api_module
+    from molgnn_ops import cli as cli_module
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("{}", encoding="utf-8")
+    captured = {}
+    fake_app = object()
+    monkeypatch.setattr(api_module, "create_app", lambda path: fake_app)
+
+    def fake_run(app, host, port):
+        captured.update({"app": app, "host": host, "port": port})
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "serve-api",
+            str(manifest_path),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9000",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {"app": fake_app, "host": "127.0.0.1", "port": 9000}

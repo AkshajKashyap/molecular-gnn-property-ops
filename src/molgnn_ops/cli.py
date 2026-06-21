@@ -21,6 +21,7 @@ from molgnn_ops.download import download_dataset
 from molgnn_ops.featurization import featurize_records_from_csv
 from molgnn_ops.fingerprints import featurize_fingerprints_from_csv
 from molgnn_ops.gnn_compare import run_gnn_comparison
+from molgnn_ops.model_registry import promote_model
 from molgnn_ops.paths import ARTIFACTS_DIR, ensure_project_dirs
 from molgnn_ops.prep import prepare_dataset
 from molgnn_ops.reporting import write_diagnostics_report
@@ -646,6 +647,77 @@ def analyze_gnn_uncertainty(
     console.print(f"Uncertainty-error rank correlation: {correlations['spearman']}")
     console.print(f"Summary: {summary['artifacts']['uncertainty_summary_json']}")
     console.print(f"Report: {summary['artifacts']['uncertainty_report_md']}")
+
+
+@app.command("promote-model")
+def promote_model_command(
+    registry_dir: Annotated[Path, typer.Argument(help="Self-contained registry package.")],
+    candidate_run_dirs: Annotated[
+        list[Path],
+        typer.Argument(help="Candidate GNN training run directories."),
+    ],
+    model_id: Annotated[str, typer.Option(help="Stable promoted model identifier.")] = (
+        "esol-gcn-v1"
+    ),
+    metric: Annotated[str, typer.Option(help="Validation selection metric.")] = "rmse",
+) -> None:
+    """Select a model by validation metrics and package it for inference."""
+    manifest = promote_model(
+        candidate_run_dirs,
+        registry_dir,
+        model_id=model_id,
+        metric=metric,
+    )
+    console.print("[bold]Promoted model[/bold]")
+    console.print(f"Model ID: {manifest.model_id}")
+    console.print(f"Selected model seed: {manifest.model_seed}")
+    console.print(f"Validation {metric}: {manifest.validation_metrics.get(metric)}")
+    console.print(f"Post-selection test {metric}: {manifest.test_metrics.get(metric)}")
+    console.print(f"Manifest: {registry_dir / 'manifest.json'}")
+
+
+@app.command("predict-smiles")
+def predict_smiles_command(
+    manifest_path: Annotated[Path, typer.Argument(help="Promoted model manifest.")],
+    smiles: Annotated[str, typer.Argument(help="Molecule as a SMILES string.")],
+) -> None:
+    """Predict aqueous solubility for one SMILES string."""
+    from molgnn_ops.inference import load_promoted_model, predict_smiles
+
+    loaded_model = load_promoted_model(manifest_path)
+    try:
+        prediction = predict_smiles(smiles, loaded_model)
+    except ValueError as error:
+        typer.echo(f"Prediction failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    console.print("[bold]Molecular solubility prediction[/bold]")
+    console.print(f"Canonical SMILES: {prediction['canonical_smiles']}")
+    console.print(
+        f"Predicted log solubility: {prediction['predicted_log_solubility']:.6f}"
+    )
+    console.print(
+        "Predicted solubility (mol/L): "
+        f"{prediction['predicted_solubility_mol_per_litre']:.8g}"
+    )
+    console.print(f"Model ID: {prediction['model_id']}")
+    for warning in prediction["warnings"]:
+        console.print(f"Warning: {warning}")
+
+
+@app.command("serve-api")
+def serve_api_command(
+    manifest_path: Annotated[Path, typer.Argument(help="Promoted model manifest.")],
+    host: Annotated[str, typer.Option(help="Interface to bind.")] = "0.0.0.0",
+    port: Annotated[int, typer.Option(help="TCP port.")] = 8000,
+) -> None:
+    """Serve the promoted molecular model through FastAPI."""
+    if not manifest_path.is_file():
+        raise typer.BadParameter(f"Model manifest does not exist: {manifest_path}")
+    import uvicorn
+
+    from molgnn_ops.api import create_app
+
+    uvicorn.run(create_app(manifest_path), host=host, port=port)
 
 
 if __name__ == "__main__":

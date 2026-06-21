@@ -76,9 +76,16 @@ seed-dependent partitions and ambiguous SMILES-only alignment.
 - One immutable prepared split and graph dataset reused by every ensemble member
 - Sample-ID-aligned uncertainty evaluation with validation-only interval calibration
 
+### Milestone 10: Model promotion and FastAPI inference
+
+- Validation-only candidate ranking with post-selection test reporting
+- Self-contained promoted model manifests and copied checkpoints
+- Validated single and ordered batch SMILES inference
+- FastAPI health, model metadata, prediction, and batch endpoints
+- Explicit chemical-space and reliability limitations with unsupported uncertainty omitted
+
 ## Future milestones
 
-10. Inference API.
-11. Interactive dashboard.
+11. Streamlit molecule explorer.
 12. Docker and CI.
 13. Final model card and portfolio documentation.
