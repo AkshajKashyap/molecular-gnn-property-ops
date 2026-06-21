@@ -6,6 +6,8 @@ from rdkit import Chem, DataStructs
 from rdkit.Chem import rdFingerprintGenerator
 from rdkit.Chem.rdchem import Mol
 
+from molgnn_ops.datasets import ensure_prepared_identity
+
 
 def _validate_fingerprint_config(radius: int, n_bits: int) -> None:
     if radius < 0:
@@ -54,7 +56,7 @@ def featurize_fingerprints_from_csv(
     if not input_csv.is_file():
         raise FileNotFoundError(f"CSV dataset not found: {input_csv}")
 
-    dataframe = pd.read_csv(input_csv)
+    dataframe = ensure_prepared_identity(pd.read_csv(input_csv))
     required_columns = {"smiles", "target", "split", "dataset_name"}
     missing_columns = sorted(required_columns.difference(dataframe.columns))
     if missing_columns:
@@ -67,6 +69,8 @@ def featurize_fingerprints_from_csv(
     splits: list[str] = []
     smiles_values: list[str] = []
     dataset_names: list[str] = []
+    sample_ids: list[str] = []
+    canonical_smiles_values: list[str] = []
     n_valid = 0
     n_invalid = 0
 
@@ -92,6 +96,8 @@ def featurize_fingerprints_from_csv(
         dataset_names.append(
             "" if pd.isna(row["dataset_name"]) else str(row["dataset_name"])
         )
+        sample_ids.append(str(row["sample_id"]))
+        canonical_smiles_values.append(str(row["canonical_smiles"]))
 
     if fingerprint_rows:
         features = np.stack(fingerprint_rows)
@@ -107,6 +113,8 @@ def featurize_fingerprints_from_csv(
             splits=np.asarray(splits, dtype=str),
             smiles=np.asarray(smiles_values, dtype=str),
             dataset_name=np.asarray(dataset_names, dtype=str),
+            sample_id=np.asarray(sample_ids, dtype=str),
+            canonical_smiles=np.asarray(canonical_smiles_values, dtype=str),
         )
 
     return {

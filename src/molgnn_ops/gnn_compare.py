@@ -109,7 +109,8 @@ def _write_report(summary: dict, output_path: Path) -> None:
         "",
         f"- Dataset: `{summary['dataset_name']}`",
         f"- Split strategy: `{summary['split_strategy']}`",
-        f"- Seeds: {', '.join(str(seed) for seed in summary['seeds'])}",
+        f"- Split seed: {summary['split_seed']}",
+        f"- Model seeds: {', '.join(str(seed) for seed in summary['model_seeds'])}",
         f"- Epoch limit: {summary['epochs']}",
         "",
         "## Fingerprint Baseline Results",
@@ -199,6 +200,7 @@ def run_gnn_comparison(
     num_layers: int = 3,
     dropout: float = 0.1,
     overwrite: bool = False,
+    split_seed: int = 42,
 ) -> dict:
     """Run repeated GNN benchmarks and aggregate their held-out metrics."""
     normalized_models = _validate_inputs(model_names, seeds)
@@ -213,13 +215,15 @@ def run_gnn_comparison(
     rows = []
     for model_name in normalized_models:
         for seed in seeds:
-            run_dir = output_dir / model_name / f"seed_{seed}"
+            run_dir = output_dir / model_name / f"model_seed_{seed}"
             run_summary = run_gnn_benchmark(
                 dataset_name,
                 run_dir,
                 split_strategy=split_strategy,
                 model_name=model_name,
                 seed=seed,
+                split_seed=split_seed,
+                model_seed=seed,
                 epochs=epochs,
                 hidden_dim=hidden_dim,
                 num_layers=num_layers,
@@ -232,6 +236,8 @@ def run_gnn_comparison(
                     "dataset_name": dataset_name,
                     "model_name": model_name,
                     "seed": seed,
+                    "split_seed": split_seed,
+                    "model_seed": seed,
                     "split_strategy": split_strategy,
                     "best_epoch": run_summary["best_epoch"],
                     **{
@@ -263,6 +269,8 @@ def run_gnn_comparison(
         "split_strategy": split_strategy,
         "model_names": normalized_models,
         "seeds": seeds,
+        "split_seed": split_seed,
+        "model_seeds": seeds,
         "epochs": epochs,
         "hidden_dim": hidden_dim,
         "num_layers": num_layers,

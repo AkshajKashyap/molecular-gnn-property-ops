@@ -5,7 +5,14 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-REQUIRED_PREDICTION_COLUMNS = {"smiles", "split", "y_true", "y_pred"}
+REQUIRED_PREDICTION_COLUMNS = {
+    "sample_id",
+    "smiles",
+    "canonical_smiles",
+    "split",
+    "y_true",
+    "y_pred",
+}
 
 
 def _validate_prediction_columns(dataframe: pd.DataFrame, source: Path | str) -> None:
@@ -15,65 +22,86 @@ def _validate_prediction_columns(dataframe: pd.DataFrame, source: Path | str) ->
 
 
 def load_ensemble_predictions(prediction_paths: list[Path]) -> pd.DataFrame:
-    """Load repeated-run predictions and strictly align them by molecule and split."""
+    """Load repeated-run predictions and strictly align them by stable sample ID."""
     if not prediction_paths:
         raise ValueError("At least one prediction path is required")
 
     aligned: pd.DataFrame | None = None
-    reference_keys: pd.MultiIndex | None = None
+    reference_ids: set[str] | None = None
     for run_index, path in enumerate(prediction_paths):
         if not path.is_file():
             raise FileNotFoundError(f"Prediction CSV does not exist: {path}")
         dataframe = pd.read_csv(path)
         _validate_prediction_columns(dataframe, path)
-        if dataframe[["smiles", "split"]].isna().any(axis=None):
-            raise ValueError(f"Prediction file {path} contains missing molecule keys")
-        duplicated = dataframe.duplicated(["smiles", "split"], keep=False)
+        if dataframe[["sample_id", "split"]].isna().any(axis=None):
+            raise ValueError(f"Prediction file {path} contains missing sample identifiers")
+        dataframe["sample_id"] = dataframe["sample_id"].astype(str)
+        duplicated = dataframe["sample_id"].duplicated(keep=False)
         if duplicated.any():
-            examples = dataframe.loc[duplicated, ["smiles", "split"]].head(3)
-            formatted = ", ".join(
-                f"({row.smiles}, {row.split})" for row in examples.itertuples()
+            duplicate_ids = sorted(dataframe.loc[duplicated, "sample_id"].unique())
+            raise ValueError(
+                f"Prediction file {path} contains duplicate sample IDs: {duplicate_ids[:5]}"
             )
-            raise ValueError(f"Prediction file {path} contains duplicate molecules: {formatted}")
 
-        current = dataframe.loc[:, ["smiles", "split", "y_true", "y_pred"]].copy()
-        current_keys = pd.MultiIndex.from_frame(current[["smiles", "split"]])
-        if reference_keys is None:
-            reference_keys = current_keys
+        current = dataframe.loc[:, sorted(REQUIRED_PREDICTION_COLUMNS)].copy()
+        current_ids = set(current["sample_id"])
+        if reference_ids is None:
+            reference_ids = current_ids
             aligned = current.rename(columns={"y_pred": f"y_pred_run_{run_index}"})
             continue
 
-        if set(current_keys) != set(reference_keys):
-            missing_count = len(set(reference_keys).difference(current_keys))
-            extra_count = len(set(current_keys).difference(reference_keys))
+        if current_ids != reference_ids:
+            missing_ids = sorted(reference_ids.difference(current_ids))
+            extra_ids = sorted(current_ids.difference(reference_ids))
             raise ValueError(
-                f"Prediction file {path} has mismatched molecules "
-                f"({missing_count} missing, {extra_count} unexpected)"
+                f"Prediction file {path} has mismatched sample IDs; "
+                f"missing sample IDs: {missing_ids[:5]}; extra sample IDs: {extra_ids[:5]}"
             )
 
         assert aligned is not None
         current = current.rename(
             columns={
+                "smiles": f"smiles_run_{run_index}",
+                "canonical_smiles": f"canonical_smiles_run_{run_index}",
+                "split": f"split_run_{run_index}",
                 "y_true": f"y_true_run_{run_index}",
                 "y_pred": f"y_pred_run_{run_index}",
             }
         )
         aligned = aligned.merge(
             current,
-            on=["smiles", "split"],
+            on="sample_id",
             how="left",
             validate="one_to_one",
             sort=False,
         )
+        other_splits = aligned.pop(f"split_run_{run_index}")
+        split_disagreements = aligned["split"] != other_splits
+        if split_disagreements.any():
+            sample_ids = aligned.loc[split_disagreements, "sample_id"].head(5).tolist()
+            raise ValueError(f"Prediction file {path} has split disagreements: {sample_ids}")
         other_targets = aligned.pop(f"y_true_run_{run_index}")
-        if not np.allclose(
+        target_matches = np.isclose(
             aligned["y_true"].to_numpy(dtype=float),
             other_targets.to_numpy(dtype=float),
             rtol=1e-7,
             atol=1e-8,
             equal_nan=False,
-        ):
-            raise ValueError(f"Prediction file {path} has mismatched y_true values")
+        )
+        if not target_matches.all():
+            sample_ids = aligned.loc[~target_matches, "sample_id"].head(5).tolist()
+            raise ValueError(f"Prediction file {path} has target disagreements: {sample_ids}")
+        other_canonical = aligned.pop(f"canonical_smiles_run_{run_index}")
+        canonical_disagreements = aligned["canonical_smiles"] != other_canonical
+        if canonical_disagreements.any():
+            sample_ids = aligned.loc[
+                canonical_disagreements,
+                "sample_id",
+            ].head(5).tolist()
+            raise ValueError(
+                f"Prediction file {path} has canonical SMILES disagreements: {sample_ids}"
+            )
+        aligned.pop(f"smiles_run_{run_index}")
 
     assert aligned is not None
     return aligned

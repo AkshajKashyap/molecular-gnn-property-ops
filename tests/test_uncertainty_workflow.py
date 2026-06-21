@@ -29,7 +29,9 @@ def test_uncertainty_workflow_writes_expected_artifacts(tmp_path: Path) -> None:
         ]
         pd.DataFrame(
             {
+                "sample_id": [f"sample-{index}" for index in range(len(smiles))],
                 "smiles": smiles,
+                "canonical_smiles": smiles,
                 "split": splits,
                 "y_true": targets,
                 "y_pred": predictions,

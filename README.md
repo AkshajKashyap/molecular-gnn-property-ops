@@ -3,8 +3,8 @@
 ## Goal
 
 Build a reproducible molecular property prediction system from SMILES strings. Future
-milestones will cover graph neural networks, scaffold splits, calibration, uncertainty
-analysis, FastAPI inference, and a Streamlit molecule explorer.
+milestones will cover inference services, an interactive molecule explorer, deployment,
+and final model documentation.
 
 ## Current Milestone
 
@@ -19,6 +19,8 @@ Milestone 8 compares those architectures across repeated seeds and reports their
 aggregate performance alongside the fingerprint baseline when it is available.
 Milestone 9 adds validation-calibrated GNN ensemble uncertainty and molecular error
 analysis without treating the resulting intervals as formal guarantees.
+Milestone 9.5 completes that work with stable sample identity and multiple GCNs trained
+against one immutable scaffold split.
 
 ## Milestone 2 Splits
 
@@ -93,9 +95,9 @@ operators use graph connectivity and atom features only.
 
 ## Milestone 8 Repeated-Seed GNN Comparison
 
-Repeated seeds expose sensitivity to parameter initialization, batch ordering, and the
-seed-dependent scaffold assignment. A single favorable result is weaker evidence than a
-consistent mean and standard deviation across repeated runs.
+Repeated model seeds expose sensitivity to parameter initialization, batch ordering, and
+dropout. A single favorable result is weaker evidence than a consistent mean and standard
+deviation across repeated runs. The split seed is recorded separately.
 
 The comparison workflow runs GCN and GIN under the same configuration, preserves every run,
 and writes CSV, JSON, Markdown, and matplotlib figures. It reports mean and standard deviation
@@ -120,7 +122,26 @@ Selective prediction sorts test molecules from lowest to highest uncertainty and
 RMSE obtained when retaining 25%, 50%, 75%, or 100% of predictions. Molecular descriptor
 groups, uncertainty buckets, and the largest ensemble errors provide descriptive failure
 analysis without claiming causal relationships. Every ensemble member must contain the same
-validation and test molecule keys and targets.
+validation and test sample IDs, splits, canonical structures, and targets.
+
+## Milestone 9.5 Fixed-Split Ensemble
+
+The original uncertainty attempt was rejected because its repeated runs used different
+scaffold partitions and aligned ambiguous rows by SMILES. That failure remains visible as an
+experimental-integrity safeguard: predictions from different validation/test populations
+must never be combined.
+
+`split_seed` controls only the immutable train/validation/test assignment. `model_seed`
+controls parameter initialization, batch order, dropout, and other training randomness. The
+fixed-split workflow prepares and featurizes ESOL once with one split seed, then reuses the
+same graph JSONL for every model seed.
+
+SMILES is not a unique observation identifier: ESOL contains repeated canonical molecules,
+including measurements with conflicting targets. Each source row therefore receives a stable
+`sample_id` derived from the dataset name and original source-row index. The ID and canonical
+SMILES are propagated through prepared CSV, graph JSONL, PyG metadata, and prediction CSVs.
+Duplicate measurements remain separate and are audited; conflicting targets are never
+silently removed or averaged.
 
 ## Installation
 
@@ -173,7 +194,7 @@ molgnn-ops prepare-csv data/raw/molecules.csv data/processed/molecules.csv \
   --target-col target \
   --dataset-name example \
   --split-strategy scaffold \
-  --seed 42
+  --split-seed 42
 ```
 
 Featurize a prepared CSV into molecular graph records:
@@ -299,4 +320,25 @@ The currently generated Milestone 8 files use seed-dependent scaffold partitions
 also contains duplicate `(smiles, split)` keys, including conflicting target measurements.
 The strict ensemble loader rejects those legacy artifacts instead of silently intersecting or
 deduplicating the test set. A real uncertainty report therefore requires ensemble members
-trained with different initialization seeds on one fixed, unambiguous prepared split.
+trained with different initialization seeds on one fixed prepared split and aligned by stable
+sample ID.
+
+Generate and evaluate the valid fixed-split ESOL GCN ensemble:
+
+```bash
+molgnn-ops run-fixed-split-ensemble \
+  esol \
+  artifacts/benchmarks/esol/fixed_split_gcn \
+  --split-strategy scaffold \
+  --split-seed 42 \
+  --model-seeds 42,43,44 \
+  --model-name gcn \
+  --epochs 50 \
+  --overwrite
+```
+
+The reproducible wrapper runs the same workflow:
+
+```bash
+bash scripts/run_esol_fixed_split_gcn_ensemble.sh
+```

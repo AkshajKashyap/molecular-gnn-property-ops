@@ -47,8 +47,9 @@ def test_run_gnn_comparison_collects_and_summarizes_runs(
     )
 
     assert len(observed_calls) == 4
-    assert observed_calls[0][1] == output_dir / "gcn" / "seed_42"
-    assert observed_calls[-1][1] == output_dir / "gin" / "seed_43"
+    assert observed_calls[0][1] == output_dir / "gcn" / "model_seed_42"
+    assert observed_calls[-1][1] == output_dir / "gin" / "model_seed_43"
+    assert observed_calls[0][2]["split_seed"] == 42
     assert observed_calls[0][2]["hidden_dim"] == 16
     assert summary["by_model"]["gcn"]["mean_test_rmse"] == pytest.approx(1.1)
     assert summary["by_model"]["gcn"]["std_test_rmse"] == pytest.approx(0.1)

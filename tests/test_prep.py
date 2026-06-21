@@ -35,7 +35,17 @@ def test_prepare_dataset_writes_random_split_csv(tmp_path: Path) -> None:
     )
     prepared = pd.read_csv(output_csv)
 
-    assert list(prepared.columns) == ["smiles", "target", "dataset_name", "split"]
+    assert list(prepared.columns) == [
+        "sample_id",
+        "smiles",
+        "canonical_smiles",
+        "target",
+        "dataset_name",
+        "split",
+    ]
+    assert prepared["sample_id"].tolist() == ["example:0", "example:1", "example:2", "example:3"]
+    assert prepared["sample_id"].is_unique
+    assert summary.split_seed == 42
     assert len(prepared) == 4
     assert set(prepared["split"]) == {"train", "val", "test"}
     assert summary.n_rows == 5

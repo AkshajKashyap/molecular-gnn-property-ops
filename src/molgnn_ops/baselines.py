@@ -19,6 +19,7 @@ from sklearn.metrics import (
 from molgnn_ops.reporting import write_markdown_report
 
 _NPZ_KEYS = ("X", "y", "splits", "smiles", "dataset_name")
+_IDENTITY_KEYS = ("sample_id", "canonical_smiles")
 
 
 def load_fingerprint_npz(path: Path) -> dict[str, np.ndarray]:
@@ -32,6 +33,9 @@ def load_fingerprint_npz(path: Path) -> dict[str, np.ndarray]:
             missing = ", ".join(missing_keys)
             raise ValueError(f"Required arrays missing from {path}: {missing}")
         arrays = {key: dataset[key].copy() for key in _NPZ_KEYS}
+        for key in _IDENTITY_KEYS:
+            if key in dataset:
+                arrays[key] = dataset[key].copy()
 
     row_count = len(arrays["y"])
     if arrays["X"].ndim != 2:
@@ -40,6 +44,17 @@ def load_fingerprint_npz(path: Path) -> dict[str, np.ndarray]:
         raise ValueError("Fingerprint dataset arrays must have matching row counts")
     if len(arrays["X"]) != row_count:
         raise ValueError("Fingerprint dataset arrays must have matching row counts")
+    if "sample_id" not in arrays:
+        arrays["sample_id"] = np.asarray(
+            [f"legacy:{index}" for index in range(row_count)],
+            dtype=str,
+        )
+    if "canonical_smiles" not in arrays:
+        arrays["canonical_smiles"] = arrays["smiles"].copy()
+    if any(len(arrays[key]) != row_count for key in _IDENTITY_KEYS):
+        raise ValueError("Fingerprint identity arrays must have matching row counts")
+    if len(set(arrays["sample_id"].tolist())) != row_count:
+        raise ValueError("Fingerprint sample_id values must be unique")
     return arrays
 
 
@@ -196,7 +211,9 @@ def train_fingerprint_baseline(
         if resolved_task_type == "classification":
             predictions, scores = _classification_predictions(best_model, features)
             frame_data: dict[str, object] = {
+                "sample_id": data["sample_id"][split_mask],
                 "smiles": data["smiles"][split_mask],
+                "canonical_smiles": data["canonical_smiles"][split_mask],
                 "split": data["splits"][split_mask],
                 "y_true": targets,
                 "y_pred": predictions,
@@ -213,7 +230,9 @@ def train_fingerprint_baseline(
         else:
             predictions = best_model.predict(features)
             frame_data = {
+                "sample_id": data["sample_id"][split_mask],
                 "smiles": data["smiles"][split_mask],
+                "canonical_smiles": data["canonical_smiles"][split_mask],
                 "split": data["splits"][split_mask],
                 "y_true": targets,
                 "y_pred": predictions,

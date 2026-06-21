@@ -117,11 +117,15 @@ def run_gnn_benchmark(
     num_layers: int = 3,
     dropout: float = 0.1,
     overwrite: bool = False,
+    split_seed: int | None = None,
+    model_seed: int | None = None,
 ) -> dict:
     """Run the complete download-to-report molecular GNN benchmark workflow."""
     from molgnn_ops.gnn_train import train_gnn_regressor
 
     spec = get_dataset_spec(dataset_name)
+    resolved_split_seed = seed if split_seed is None else split_seed
+    resolved_model_seed = seed if model_seed is None else model_seed
     if spec.task_type != "regression":
         raise ValueError("GNN benchmark currently supports regression datasets only")
     summary_path = output_dir / "gnn_benchmark_summary.json"
@@ -132,6 +136,8 @@ def run_gnn_benchmark(
             "split_strategy": split_strategy,
             "model_name": model_name,
             "seed": seed,
+            "split_seed": resolved_split_seed,
+            "model_seed": resolved_model_seed,
             "epochs": epochs,
             "hidden_dim": hidden_dim,
             "num_layers": num_layers,
@@ -158,14 +164,14 @@ def run_gnn_benchmark(
         target_col=spec.target_col,
         dataset_name=spec.name,
         split_strategy=split_strategy,
-        seed=seed,
+        split_seed=resolved_split_seed,
     )
     graph_summary = featurize_records_from_csv(prepared_csv, graph_jsonl)
     training_summary = train_gnn_regressor(
         graph_jsonl,
         training_output_dir,
         model_name=model_name,
-        seed=seed,
+        model_seed=resolved_model_seed,
         epochs=epochs,
         hidden_dim=hidden_dim,
         num_layers=num_layers,
@@ -178,6 +184,8 @@ def run_gnn_benchmark(
         "split_strategy": split_strategy,
         "model_name": model_name,
         "seed": seed,
+        "split_seed": resolved_split_seed,
+        "model_seed": resolved_model_seed,
         "epochs": epochs,
         "hidden_dim": hidden_dim,
         "num_layers": num_layers,
@@ -362,6 +370,171 @@ def run_gnn_uncertainty_analysis(
     }
     write_gnn_uncertainty_report(summary, report_md)
     summary_json.write_text(
+        json.dumps(summary, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    return summary
+
+
+def run_fixed_split_gnn_ensemble(
+    dataset_name: str,
+    output_dir: Path,
+    split_strategy: str = "scaffold",
+    split_seed: int = 42,
+    model_seeds: list[int] | None = None,
+    model_name: str = "gcn",
+    epochs: int = 50,
+    hidden_dim: int = 64,
+    num_layers: int = 3,
+    dropout: float = 0.1,
+    overwrite: bool = False,
+) -> dict:
+    """Train an ensemble on one immutable split and evaluate its uncertainty."""
+    from molgnn_ops.duplicate_audit import audit_duplicate_molecules
+    from molgnn_ops.gnn_train import train_gnn_regressor
+    from molgnn_ops.gnn_uncertainty import load_ensemble_predictions
+    from molgnn_ops.reporting import write_fixed_split_ensemble_report
+
+    resolved_model_seeds = model_seeds or [42, 43, 44]
+    if not resolved_model_seeds:
+        raise ValueError("At least one model seed is required")
+    if len(resolved_model_seeds) < 2:
+        raise ValueError("At least two model seeds are required for an ensemble")
+    if len(set(resolved_model_seeds)) != len(resolved_model_seeds):
+        raise ValueError("Model seeds must be unique")
+    if split_strategy not in {"random", "scaffold"}:
+        raise ValueError("split_strategy must be 'random' or 'scaffold'")
+
+    spec = get_dataset_spec(dataset_name)
+    if spec.task_type != "regression":
+        raise ValueError("Fixed-split GNN ensembles currently support regression only")
+    run_dir = output_dir / f"split_seed_{split_seed}"
+    summary_path = run_dir / "fixed_split_ensemble_summary.json"
+    report_path = run_dir / "fixed_split_ensemble_report.md"
+    if summary_path.is_file() and not overwrite:
+        cached = json.loads(summary_path.read_text(encoding="utf-8"))
+        requested = {
+            "dataset_name": spec.name,
+            "split_strategy": split_strategy,
+            "split_seed": split_seed,
+            "model_seeds": resolved_model_seeds,
+            "model_name": model_name,
+            "epochs": epochs,
+            "hidden_dim": hidden_dim,
+            "num_layers": num_layers,
+            "dropout": dropout,
+        }
+        if any(cached.get(key) != value for key, value in requested.items()):
+            raise ValueError(
+                f"Ensemble directory {run_dir} contains a different configuration; "
+                "set overwrite=True to replace it"
+            )
+        required_artifacts = [
+            cached["artifacts"]["prepared_csv"],
+            cached["artifacts"]["graph_jsonl"],
+            cached["artifacts"]["duplicate_audit_json"],
+            cached["artifacts"]["uncertainty_summary_json"],
+            cached["artifacts"]["report_md"],
+        ]
+        if all(Path(path).is_file() for path in required_artifacts):
+            return cached
+
+    run_dir.mkdir(parents=True, exist_ok=True)
+    raw_csv = download_dataset(spec.name, overwrite=overwrite)
+    prepared_csv = run_dir / "prepared.csv"
+    graph_jsonl = run_dir / "graphs.jsonl"
+    duplicate_audit_path = run_dir / "duplicate_audit.json"
+    preparation = prepare_dataset(
+        input_csv=raw_csv,
+        output_csv=prepared_csv,
+        smiles_col=spec.smiles_col,
+        target_col=spec.target_col,
+        dataset_name=spec.name,
+        split_strategy=split_strategy,
+        split_seed=split_seed,
+    )
+    duplicate_audit = audit_duplicate_molecules(prepared_csv)
+    duplicate_audit_path.write_text(
+        json.dumps(duplicate_audit, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    graph_summary = featurize_records_from_csv(prepared_csv, graph_jsonl)
+
+    model_summaries = []
+    prediction_paths = []
+    for model_seed in resolved_model_seeds:
+        model_output_dir = run_dir / f"model_seed_{model_seed}"
+        training = train_gnn_regressor(
+            graph_jsonl,
+            model_output_dir,
+            model_name=model_name,
+            model_seed=model_seed,
+            epochs=epochs,
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            dropout=dropout,
+        )
+        prediction_path = Path(training["artifacts"]["predictions"])
+        prediction_paths.append(prediction_path)
+        model_summaries.append(
+            {
+                "model_seed": model_seed,
+                "best_epoch": training["best_epoch"],
+                "validation_metrics": training["validation_metrics"],
+                "test_metrics": training["test_metrics"],
+                "predictions_csv": str(prediction_path),
+                "metrics_json": training["artifacts"]["metrics"],
+                "model_checkpoint": training["artifacts"]["model"],
+            }
+        )
+
+    load_ensemble_predictions(prediction_paths)
+    uncertainty = run_gnn_uncertainty_analysis(
+        prediction_paths,
+        run_dir / "uncertainty",
+    )
+    summary = {
+        "dataset_name": spec.name,
+        "task_type": spec.task_type,
+        "split_strategy": split_strategy,
+        "split_seed": split_seed,
+        "model_seeds": resolved_model_seeds,
+        "model_name": model_name,
+        "epochs": epochs,
+        "hidden_dim": hidden_dim,
+        "num_layers": num_layers,
+        "dropout": dropout,
+        "split_counts": {
+            "train": preparation.n_train,
+            "val": preparation.n_val,
+            "test": preparation.n_test,
+        },
+        "duplicate_audit": duplicate_audit,
+        "models": model_summaries,
+        "uncertainty": {
+            "ensemble_test_metrics": uncertainty["ensemble_test_metrics"],
+            "interval_results": uncertainty["interval_results"],
+            "uncertainty_error_correlations": uncertainty[
+                "uncertainty_error_correlations"
+            ],
+            "selective_prediction": uncertainty["selective_prediction"],
+        },
+        "preparation": preparation.model_dump(mode="json"),
+        "graphs": graph_summary,
+        "artifacts": {
+            "raw_csv": str(raw_csv),
+            "prepared_csv": str(prepared_csv),
+            "graph_jsonl": str(graph_jsonl),
+            "duplicate_audit_json": str(duplicate_audit_path),
+            "uncertainty_summary_json": uncertainty["artifacts"][
+                "uncertainty_summary_json"
+            ],
+            "summary_json": str(summary_path),
+            "report_md": str(report_path),
+        },
+    }
+    write_fixed_split_ensemble_report(summary, report_path)
+    summary_path.write_text(
         json.dumps(summary, indent=2, sort_keys=True, allow_nan=False) + "\n",
         encoding="utf-8",
     )

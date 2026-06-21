@@ -66,6 +66,8 @@ def _evaluate(
     targets: list[float] = []
     predictions: list[float] = []
     smiles_values: list[str] = []
+    sample_ids: list[str] = []
+    canonical_smiles_values: list[str] = []
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
@@ -74,15 +76,35 @@ def _evaluate(
             targets.extend(batch.y.view(-1).detach().cpu().tolist())
             predictions.extend(batch_predictions.detach().cpu().tolist())
             batch_smiles = batch.smiles
-            smiles_values.extend(
+            batch_smiles_values = (
                 batch_smiles if isinstance(batch_smiles, list) else [batch_smiles]
+            )
+            smiles_values.extend(batch_smiles_values)
+            batch_sample_ids = getattr(batch, "sample_id", None)
+            if batch_sample_ids is None:
+                first_legacy_index = len(sample_ids)
+                sample_ids.extend(
+                    f"legacy:{split_name}:{first_legacy_index + index}"
+                    for index in range(len(batch_smiles_values))
+                )
+            else:
+                sample_ids.extend(
+                    batch_sample_ids
+                    if isinstance(batch_sample_ids, list)
+                    else [batch_sample_ids]
+                )
+            batch_canonical = getattr(batch, "canonical_smiles", batch_smiles_values)
+            canonical_smiles_values.extend(
+                batch_canonical if isinstance(batch_canonical, list) else [batch_canonical]
             )
 
     target_array = np.asarray(targets, dtype=float)
     prediction_array = np.asarray(predictions, dtype=float)
     frame = pd.DataFrame(
         {
+            "sample_id": sample_ids,
             "smiles": smiles_values,
+            "canonical_smiles": canonical_smiles_values,
             "split": split_name,
             "y_true": target_array,
             "y_pred": prediction_array,
@@ -120,6 +142,7 @@ def train_gnn_regressor(
     batch_size: int = 32,
     epochs: int = 50,
     patience: int = 10,
+    model_seed: int | None = None,
 ) -> dict:
     """Train a graph regressor with validation early stopping and held-out evaluation."""
     if epochs <= 0:
@@ -131,7 +154,8 @@ def train_gnn_regressor(
     if lr <= 0 or weight_decay < 0:
         raise ValueError("lr must be positive and weight_decay must be non-negative")
 
-    _set_random_seeds(seed)
+    resolved_model_seed = seed if model_seed is None else model_seed
+    _set_random_seeds(resolved_model_seed)
     data_list = load_pyg_dataset_from_jsonl(graph_jsonl)
     splits = split_pyg_dataset(data_list)
     input_dim = int(splits["train"][0].x.shape[1])
@@ -144,7 +168,7 @@ def train_gnn_regressor(
     if target_std == 0:
         target_std = 1.0
 
-    generator = torch.Generator().manual_seed(seed)
+    generator = torch.Generator().manual_seed(resolved_model_seed)
     train_loader = DataLoader(
         splits["train"],
         batch_size=batch_size,
@@ -258,6 +282,7 @@ def train_gnn_regressor(
         "target_mean": target_mean,
         "target_std": target_std,
         "best_epoch": best_epoch,
+        "model_seed": resolved_model_seed,
     }
     torch.save(checkpoint, model_path)
     pd.concat([validation_predictions, test_predictions], ignore_index=True).to_csv(
@@ -267,7 +292,11 @@ def train_gnn_regressor(
     pd.DataFrame(history).to_csv(history_path, index=False)
 
     fingerprint_comparison = None
-    nearby_fingerprint = _nearby_fingerprint_metrics(graph_jsonl, output_dir, seed)
+    nearby_fingerprint = _nearby_fingerprint_metrics(
+        graph_jsonl,
+        output_dir,
+        resolved_model_seed,
+    )
     if nearby_fingerprint is not None:
         fingerprint_path, fingerprint_metrics = nearby_fingerprint
         fingerprint_rmse = fingerprint_metrics.get("test_metrics", {}).get("rmse")
@@ -291,7 +320,8 @@ def train_gnn_regressor(
         "model_name": model_name,
         "dataset_source": dataset_source,
         "device": str(device),
-        "seed": seed,
+        "seed": resolved_model_seed,
+        "model_seed": resolved_model_seed,
         "best_epoch": best_epoch,
         "epochs_ran": len(history),
         "hyperparameters": hyperparameters,

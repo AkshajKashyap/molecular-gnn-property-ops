@@ -49,7 +49,12 @@ def test_featurize_csv_command_smoke(tmp_path: Path) -> None:
 
     input_csv = tmp_path / "prepared.csv"
     output_jsonl = tmp_path / "graphs.jsonl"
-    pd.DataFrame({"smiles": ["CCO", "invalid"]}).to_csv(input_csv, index=False)
+    pd.DataFrame(
+        {
+            "smiles": ["CCO", "invalid"],
+            "dataset_name": ["example", "example"],
+        }
+    ).to_csv(input_csv, index=False)
 
     result = CliRunner().invoke(
         app,
@@ -428,3 +433,59 @@ def test_analyze_gnn_uncertainty_command_reports_alignment_error(
     assert result.exit_code == 1
     assert "Uncertainty analysis failed: prediction molecules do not match" in result.output
     assert "Traceback" not in result.output
+
+
+def test_run_fixed_split_ensemble_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    captured = {}
+
+    def fake_ensemble(*args, **kwargs):
+        captured.update(kwargs)
+        return {
+            "split_seed": 42,
+            "model_seeds": [42, 43],
+            "split_counts": {"train": 6, "val": 2, "test": 2},
+            "duplicate_audit": {
+                "duplicate_canonical_smiles_groups": 1,
+                "duplicate_groups_with_conflicting_targets": 1,
+            },
+            "models": [
+                {"model_seed": 42, "test_metrics": {"rmse": 1.0}},
+                {"model_seed": 43, "test_metrics": {"rmse": 1.2}},
+            ],
+            "uncertainty": {
+                "ensemble_test_metrics": {"rmse": 0.9},
+                "interval_results": [
+                    {
+                        "target_coverage": 0.9,
+                        "empirical_coverage": 0.85,
+                        "mean_interval_width": 2.0,
+                    }
+                ],
+                "uncertainty_error_correlations": {"pearson": 0.3, "spearman": 0.4},
+            },
+            "artifacts": {
+                "summary_json": str(tmp_path / "summary.json"),
+                "report_md": str(tmp_path / "report.md"),
+            },
+        }
+
+    monkeypatch.setattr(cli_module, "run_fixed_split_gnn_ensemble", fake_ensemble)
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "run-fixed-split-ensemble",
+            "esol",
+            str(tmp_path),
+            "--model-seeds",
+            "42,43",
+            "--epochs",
+            "2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["split_seed"] == 42
+    assert captured["model_seeds"] == [42, 43]
+    assert "Ensemble test RMSE: 0.9000" in result.output

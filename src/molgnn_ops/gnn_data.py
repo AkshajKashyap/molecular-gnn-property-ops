@@ -27,7 +27,9 @@ def molecule_graph_to_pyg_data(graph: MoleculeGraph) -> Data:
         edge_index=edge_index,
         edge_attr=edge_attr,
         y=torch.tensor([target], dtype=torch.float32),
+        sample_id=graph.sample_id,
         smiles=graph.smiles,
+        canonical_smiles=graph.canonical_smiles,
         split=graph.split,
         dataset_name=graph.dataset_name,
     )

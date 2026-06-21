@@ -26,6 +26,21 @@ def test_molecule_graph_to_pyg_data_converts_cco() -> None:
     assert data.split == "train"
 
 
+def test_sample_identity_survives_graph_to_pyg_conversion() -> None:
+    data = molecule_graph_to_pyg_data(
+        featurize_smiles(
+            "OCC",
+            target=1.5,
+            split="train",
+            dataset_name="example",
+            sample_id="example:3",
+        )
+    )
+
+    assert data.sample_id == "example:3"
+    assert data.canonical_smiles == "CCO"
+
+
 def test_load_pyg_dataset_skips_missing_targets(tmp_path: Path) -> None:
     graph_path = tmp_path / "graphs.jsonl"
     save_graphs_jsonl(

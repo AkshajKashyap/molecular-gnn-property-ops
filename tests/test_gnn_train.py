@@ -29,6 +29,7 @@ def test_train_gnn_regressor_tiny_dataset(tmp_path: Path) -> None:
             target=index * 0.25,
             split=split,
             dataset_name="synthetic",
+            sample_id=f"synthetic:{index}",
         )
         for index, (smiles, split) in enumerate(zip(smiles_values, split_values, strict=True))
     ]
@@ -53,6 +54,16 @@ def test_train_gnn_regressor_tiny_dataset(tmp_path: Path) -> None:
     assert summary["best_epoch"] in {1, 2}
     assert summary["test_rmse"] >= 0
     assert len(predictions) == 6
+    assert predictions["sample_id"].tolist() == [
+        "synthetic:6",
+        "synthetic:7",
+        "synthetic:8",
+        "synthetic:9",
+        "synthetic:10",
+        "synthetic:11",
+    ]
+    assert "canonical_smiles" in predictions
+    assert summary["model_seed"] == 42
     assert len(history) == 2
     assert (output_dir / "models" / "gnn_regressor.pt").is_file()
     assert (output_dir / "metrics.json").is_file()

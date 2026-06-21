@@ -47,11 +47,13 @@ def test_featurize_smiles_preserves_metadata() -> None:
         target=1.5,
         split="train",
         dataset_name="example",
+        sample_id="example:7",
     )
 
     assert graph.target == 1.5
     assert graph.split == "train"
     assert graph.dataset_name == "example"
+    assert graph.sample_id == "example:7"
 
 
 def test_graph_io_round_trip(tmp_path: Path) -> None:
@@ -89,3 +91,4 @@ def test_featurize_records_from_csv_skips_invalid_smiles(tmp_path: Path) -> None
     assert graphs[0].target == 1.0
     assert graphs[0].split == "train"
     assert graphs[0].dataset_name == "example"
+    assert graphs[0].sample_id == "example:0"

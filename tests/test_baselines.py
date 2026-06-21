@@ -55,7 +55,15 @@ def test_train_fingerprint_baseline_classification(tmp_path: Path) -> None:
 
     assert metrics["task_type"] == "classification"
     assert metrics["best_model"] in {"logistic_regression", "random_forest"}
-    assert set(predictions.columns) == {"smiles", "split", "y_true", "y_pred", "y_score"}
+    assert set(predictions.columns) == {
+        "sample_id",
+        "smiles",
+        "canonical_smiles",
+        "split",
+        "y_true",
+        "y_pred",
+        "y_score",
+    }
     assert (output_dir / "models" / "fingerprint_baseline.joblib").is_file()
     assert (output_dir / "metrics.json").is_file()
     assert (output_dir / "report.md").is_file()
@@ -77,7 +85,14 @@ def test_train_fingerprint_baseline_regression(tmp_path: Path) -> None:
     assert metrics["task_type"] == "regression"
     assert metrics["best_model"] in {"ridge", "random_forest"}
     assert set(metrics["test_metrics"]) == {"mae", "rmse", "r2"}
-    assert set(predictions.columns) == {"smiles", "split", "y_true", "y_pred"}
+    assert set(predictions.columns) == {
+        "sample_id",
+        "smiles",
+        "canonical_smiles",
+        "split",
+        "y_true",
+        "y_pred",
+    }
     assert (output_dir / "models" / "fingerprint_baseline.joblib").is_file()
 
 

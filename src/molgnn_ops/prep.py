@@ -16,6 +16,7 @@ class PreparedDatasetSummary(BaseModel):
     n_val: int
     n_test: int
     split_strategy: str
+    split_seed: int
     output_path: Path
 
 
@@ -26,26 +27,28 @@ def prepare_dataset(
     target_col: str,
     dataset_name: str,
     split_strategy: str,
-    seed: int = 42,
+    seed: int | None = None,
     train_frac: float = 0.7,
     val_frac: float = 0.15,
     test_frac: float = 0.15,
+    split_seed: int = 42,
 ) -> PreparedDatasetSummary:
     """Load, split, and persist a model-ready tabular molecular dataset."""
     if split_strategy not in {"random", "scaffold"}:
         raise ValueError("split_strategy must be either 'random' or 'scaffold'")
 
     records = load_csv_dataset(input_csv, smiles_col, target_col, dataset_name)
+    resolved_split_seed = split_seed if seed is None else seed
     n_rows = len(pd.read_csv(input_csv))
     smiles = [record.smiles for record in records]
 
     if split_strategy == "random":
         split_indices = random_split_indices(
-            len(records), train_frac, val_frac, test_frac, seed
+            len(records), train_frac, val_frac, test_frac, resolved_split_seed
         )
     else:
         split_indices = scaffold_split_indices(
-            smiles, train_frac, val_frac, test_frac, seed
+            smiles, train_frac, val_frac, test_frac, resolved_split_seed
         )
 
     split_labels = [""] * len(records)
@@ -55,7 +58,9 @@ def prepare_dataset(
 
     prepared = pd.DataFrame(
         {
+            "sample_id": [record.sample_id for record in records],
             "smiles": smiles,
+            "canonical_smiles": [record.canonical_smiles for record in records],
             "target": [record.target for record in records],
             "dataset_name": [record.dataset_name for record in records],
             "split": split_labels,
@@ -73,5 +78,6 @@ def prepare_dataset(
         n_val=len(split_indices["val"]),
         n_test=len(split_indices["test"]),
         split_strategy=split_strategy,
+        split_seed=resolved_split_seed,
         output_path=output_csv,
     )

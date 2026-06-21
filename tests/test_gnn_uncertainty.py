@@ -18,7 +18,9 @@ from molgnn_ops.gnn_uncertainty import (
 def _write_prediction_runs(tmp_path: Path) -> list[Path]:
     first = pd.DataFrame(
         {
+            "sample_id": ["sample-0", "sample-1", "sample-2", "sample-3"],
             "smiles": ["CCO", "CCN", "CCC", "CCCl"],
+            "canonical_smiles": ["CCO", "CCN", "CCC", "CCCl"],
             "split": ["val", "val", "test", "test"],
             "y_true": [1.0, 2.0, 3.0, 4.0],
             "y_pred": [0.8, 1.6, 2.5, 3.0],
@@ -26,7 +28,9 @@ def _write_prediction_runs(tmp_path: Path) -> list[Path]:
     )
     second = pd.DataFrame(
         {
+            "sample_id": ["sample-3", "sample-2", "sample-1", "sample-0"],
             "smiles": ["CCCl", "CCC", "CCN", "CCO"],
+            "canonical_smiles": ["CCCl", "CCC", "CCN", "CCO"],
             "split": ["test", "test", "val", "val"],
             "y_true": [4.0, 3.0, 2.0, 1.0],
             "y_pred": [5.0, 3.5, 2.4, 1.2],
@@ -57,27 +61,72 @@ def test_load_ensemble_predictions_rejects_mismatched_targets(tmp_path: Path) ->
     dataframe.loc[dataframe["smiles"] == "CCO", "y_true"] = 9.0
     dataframe.to_csv(paths[1], index=False)
 
-    with pytest.raises(ValueError, match="mismatched y_true"):
+    with pytest.raises(ValueError, match="target disagreements"):
         load_ensemble_predictions(paths)
 
 
-def test_load_ensemble_predictions_rejects_duplicate_molecules(tmp_path: Path) -> None:
+def test_load_ensemble_predictions_rejects_duplicate_sample_ids(tmp_path: Path) -> None:
     paths = _write_prediction_runs(tmp_path)
     dataframe = pd.read_csv(paths[0])
     dataframe = pd.concat([dataframe, dataframe.iloc[[0]]], ignore_index=True)
     dataframe.to_csv(paths[0], index=False)
 
-    with pytest.raises(ValueError, match="duplicate molecules"):
+    with pytest.raises(ValueError, match="duplicate sample IDs"):
         load_ensemble_predictions(paths)
 
 
-def test_load_ensemble_predictions_rejects_mismatched_molecules(tmp_path: Path) -> None:
+def test_load_ensemble_predictions_rejects_mismatched_sample_ids(tmp_path: Path) -> None:
     paths = _write_prediction_runs(tmp_path)
     dataframe = pd.read_csv(paths[1])
-    dataframe.loc[dataframe["smiles"] == "CCO", "smiles"] = "COC"
+    dataframe.loc[dataframe["sample_id"] == "sample-0", "sample_id"] = "extra"
     dataframe.to_csv(paths[1], index=False)
 
-    with pytest.raises(ValueError, match="mismatched molecules"):
+    with pytest.raises(ValueError, match="missing sample IDs"):
+        load_ensemble_predictions(paths)
+
+
+def test_load_ensemble_predictions_allows_duplicate_smiles_with_distinct_ids(
+    tmp_path: Path,
+) -> None:
+    paths = _write_prediction_runs(tmp_path)
+    for path in paths:
+        dataframe = pd.read_csv(path)
+        dataframe.loc[dataframe["sample_id"].isin(["sample-0", "sample-1"]), "smiles"] = "CCO"
+        dataframe.loc[
+            dataframe["sample_id"].isin(["sample-0", "sample-1"]),
+            "canonical_smiles",
+        ] = "CCO"
+        dataframe.to_csv(path, index=False)
+
+    aligned = load_ensemble_predictions(paths)
+
+    assert len(aligned) == 4
+    assert aligned["sample_id"].is_unique
+    assert (aligned["smiles"] == "CCO").sum() == 2
+
+
+def test_load_ensemble_predictions_rejects_split_disagreements(tmp_path: Path) -> None:
+    paths = _write_prediction_runs(tmp_path)
+    dataframe = pd.read_csv(paths[1])
+    dataframe.loc[dataframe["sample_id"] == "sample-0", "split"] = "test"
+    dataframe.to_csv(paths[1], index=False)
+
+    with pytest.raises(ValueError, match="split disagreements"):
+        load_ensemble_predictions(paths)
+
+
+def test_load_ensemble_predictions_rejects_canonical_smiles_disagreements(
+    tmp_path: Path,
+) -> None:
+    paths = _write_prediction_runs(tmp_path)
+    dataframe = pd.read_csv(paths[1])
+    dataframe.loc[
+        dataframe["sample_id"] == "sample-0",
+        "canonical_smiles",
+    ] = "COC"
+    dataframe.to_csv(paths[1], index=False)
+
+    with pytest.raises(ValueError, match="canonical SMILES disagreements"):
         load_ensemble_predictions(paths)
 
 

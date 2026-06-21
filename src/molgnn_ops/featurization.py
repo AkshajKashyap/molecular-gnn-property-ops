@@ -44,6 +44,7 @@ class BondFeatureConfig:
 
 
 class MoleculeGraph(BaseModel):
+    sample_id: str | None = None
     smiles: str
     canonical_smiles: str
     atom_features: list[list[float]]
@@ -127,6 +128,7 @@ def _featurize_molecule(
     target: float | int | None = None,
     split: str | None = None,
     dataset_name: str | None = None,
+    sample_id: str | None = None,
 ) -> MoleculeGraph:
     node_features = [atom_features(atom) for atom in molecule.GetAtoms()]
     source_indices: list[int] = []
@@ -142,6 +144,7 @@ def _featurize_molecule(
         directed_edge_features.extend((features, features.copy()))
 
     return MoleculeGraph(
+        sample_id=sample_id,
         smiles=smiles,
         canonical_smiles=Chem.MolToSmiles(molecule, canonical=True),
         atom_features=node_features,
@@ -158,6 +161,7 @@ def featurize_smiles(
     target: float | int | None = None,
     split: str | None = None,
     dataset_name: str | None = None,
+    sample_id: str | None = None,
 ) -> MoleculeGraph:
     """Convert a valid SMILES string into an inspectable molecular graph."""
     normalized_smiles, molecule = _parse_smiles(smiles)
@@ -167,6 +171,7 @@ def featurize_smiles(
         target=target,
         split=split,
         dataset_name=dataset_name,
+        sample_id=sample_id,
     )
 
 
@@ -187,6 +192,9 @@ def featurize_records_from_csv(
     dataframe = pd.read_csv(input_csv)
     if "smiles" not in dataframe.columns:
         raise ValueError(f"SMILES column 'smiles' not found in {input_csv}")
+    from molgnn_ops.datasets import ensure_prepared_identity
+
+    dataframe = ensure_prepared_identity(dataframe)
 
     graphs: list[MoleculeGraph] = []
     n_invalid = 0
@@ -211,6 +219,7 @@ def featurize_records_from_csv(
                 target=_optional_value(row, "target"),
                 split=str(split_value) if split_value is not None else None,
                 dataset_name=str(dataset_value) if dataset_value is not None else None,
+                sample_id=str(row["sample_id"]),
             )
         )
 

@@ -44,7 +44,15 @@ def test_featurize_fingerprints_from_csv_skips_unusable_rows(tmp_path: Path) -> 
         assert dataset["X"].shape == (2, 64)
         assert dataset["y"].tolist() == [1.0, 0.0]
         assert dataset["splits"].tolist() == ["train", "test"]
-        assert set(dataset.files) == {"X", "y", "splits", "smiles", "dataset_name"}
+        assert set(dataset.files) == {
+            "X",
+            "y",
+            "splits",
+            "smiles",
+            "dataset_name",
+            "sample_id",
+            "canonical_smiles",
+        }
     assert summary == {
         "n_rows": 4,
         "n_valid": 3,

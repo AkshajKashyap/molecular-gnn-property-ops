@@ -65,6 +65,17 @@
 - Empirical coverage, interval width, and selective prediction evaluation
 - Descriptor groups, uncertainty buckets, and worst-prediction analysis
 
+Completion required a fixed-split repair after the first real run correctly rejected
+seed-dependent partitions and ambiguous SMILES-only alignment.
+
+### Milestone 9.5: Fixed-split ensemble generation
+
+- Stable source-row sample IDs and canonical SMILES across all data representations
+- Duplicate-molecule audit that preserves and reports conflicting measurements
+- Independent split and model seeds
+- One immutable prepared split and graph dataset reused by every ensemble member
+- Sample-ID-aligned uncertainty evaluation with validation-only interval calibration
+
 ## Future milestones
 
 10. Inference API.

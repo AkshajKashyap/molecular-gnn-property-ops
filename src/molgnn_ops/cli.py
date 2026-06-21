@@ -26,6 +26,7 @@ from molgnn_ops.prep import prepare_dataset
 from molgnn_ops.reporting import write_diagnostics_report
 from molgnn_ops.workflows import (
     run_fingerprint_benchmark,
+    run_fixed_split_gnn_ensemble,
     run_gnn_benchmark,
     run_gnn_uncertainty_analysis,
 )
@@ -73,7 +74,10 @@ def prepare_csv(
         Literal["random", "scaffold"],
         typer.Option(help="Dataset split strategy."),
     ],
-    seed: Annotated[int, typer.Option(help="Random seed used for splitting.")] = 42,
+    split_seed: Annotated[
+        int,
+        typer.Option("--split-seed", "--seed", help="Random seed used for splitting."),
+    ] = 42,
 ) -> None:
     """Prepare a molecular CSV and add persistent split metadata."""
     summary = prepare_dataset(
@@ -83,7 +87,7 @@ def prepare_csv(
         target_col=target_col,
         dataset_name=dataset_name,
         split_strategy=split_strategy,
-        seed=seed,
+        split_seed=split_seed,
     )
 
     console.print("[bold]Prepared dataset[/bold]")
@@ -91,6 +95,7 @@ def prepare_csv(
     console.print(f"Rows: {summary.n_valid_smiles}/{summary.n_rows} nonblank SMILES")
     console.print(f"Missing targets: {summary.n_missing_targets}")
     console.print(f"Split strategy: {summary.split_strategy}")
+    console.print(f"Split seed: {summary.split_seed}")
     console.print(
         f"Train/val/test: {summary.n_train}/{summary.n_val}/{summary.n_test}"
     )
@@ -387,7 +392,10 @@ def train_gnn_regressor_command(
         Literal["gcn", "gin"],
         typer.Option(help="Graph neural network architecture."),
     ] = "gcn",
-    seed: Annotated[int, typer.Option(help="Random seed.")] = 42,
+    model_seed: Annotated[
+        int,
+        typer.Option("--model-seed", "--seed", help="Model training seed."),
+    ] = 42,
     epochs: Annotated[int, typer.Option(help="Maximum training epochs.")] = 50,
     batch_size: Annotated[int, typer.Option(help="Graphs per training batch.")] = 32,
     hidden_dim: Annotated[int, typer.Option(help="Hidden feature width.")] = 64,
@@ -401,7 +409,7 @@ def train_gnn_regressor_command(
         graph_jsonl,
         output_dir,
         model_name=model_name,
-        seed=seed,
+        model_seed=model_seed,
         epochs=epochs,
         batch_size=batch_size,
         hidden_dim=hidden_dim,
@@ -411,6 +419,7 @@ def train_gnn_regressor_command(
     console.print("[bold]Completed GNN regression training[/bold]")
     console.print(f"Model: {summary['model_name']}")
     console.print(f"Device: {summary['device']}")
+    console.print(f"Model seed: {summary.get('model_seed', model_seed)}")
     console.print(f"Best epoch: {summary['best_epoch']}")
     console.print(f"Best validation RMSE: {summary['best_val_rmse']}")
     console.print(f"Test RMSE: {summary['test_rmse']}")
@@ -430,7 +439,11 @@ def run_gnn_benchmark_command(
         Literal["gcn", "gin"],
         typer.Option(help="Graph neural network architecture."),
     ] = "gcn",
-    seed: Annotated[int, typer.Option(help="Random seed.")] = 42,
+    split_seed: Annotated[int, typer.Option(help="Dataset partition seed.")] = 42,
+    model_seed: Annotated[
+        int,
+        typer.Option("--model-seed", "--seed", help="Model training seed."),
+    ] = 42,
     epochs: Annotated[int, typer.Option(help="Maximum training epochs.")] = 50,
     overwrite: Annotated[
         bool,
@@ -443,7 +456,8 @@ def run_gnn_benchmark_command(
         output_dir,
         split_strategy=split_strategy,
         model_name=model_name,
-        seed=seed,
+        split_seed=split_seed,
+        model_seed=model_seed,
         epochs=epochs,
         overwrite=overwrite,
     )
@@ -451,6 +465,8 @@ def run_gnn_benchmark_command(
     console.print(f"Dataset: {summary['dataset_name']}")
     console.print(f"Model: {summary['model_name']}")
     console.print(f"Split strategy: {summary['split_strategy']}")
+    console.print(f"Split seed: {summary.get('split_seed', split_seed)}")
+    console.print(f"Model seed: {summary.get('model_seed', model_seed)}")
     console.print(f"Best epoch: {summary['best_epoch']}")
     console.print(f"Best validation RMSE: {summary['best_val_rmse']}")
     console.print(f"Test RMSE: {summary['test_rmse']}")
@@ -464,7 +480,11 @@ def compare_gnns(
     dataset_name: Annotated[str, typer.Argument(help="Registered regression dataset.")],
     output_dir: Annotated[Path, typer.Argument(help="Comparison artifact directory.")],
     models: Annotated[str, typer.Option(help="Comma-separated GNN models.")] = "gcn,gin",
-    seeds: Annotated[str, typer.Option(help="Comma-separated random seeds.")] = "42,43,44",
+    model_seeds: Annotated[
+        str,
+        typer.Option("--model-seeds", "--seeds", help="Comma-separated model seeds."),
+    ] = "42,43,44",
+    split_seed: Annotated[int, typer.Option(help="Shared dataset partition seed.")] = 42,
     split_strategy: Annotated[
         Literal["random", "scaffold"],
         typer.Option(help="Dataset split strategy."),
@@ -483,7 +503,8 @@ def compare_gnns(
         dataset_name,
         output_dir,
         model_names=_parse_model_names(models),
-        seeds=_parse_seeds(seeds),
+        seeds=_parse_seeds(model_seeds),
+        split_seed=split_seed,
         split_strategy=split_strategy,
         epochs=epochs,
         hidden_dim=hidden_dim,
@@ -511,6 +532,77 @@ def compare_gnns(
     console.print(f"Metrics: {summary['comparison_metrics_csv']}")
     console.print(f"Summary: {summary['comparison_summary_json']}")
     console.print(f"Report: {summary['comparison_report_md']}")
+
+
+@app.command("run-fixed-split-ensemble")
+def run_fixed_split_ensemble_command(
+    dataset_name: Annotated[str, typer.Argument(help="Registered regression dataset.")],
+    output_dir: Annotated[Path, typer.Argument(help="Fixed-split ensemble directory.")],
+    split_strategy: Annotated[
+        Literal["random", "scaffold"],
+        typer.Option(help="Dataset split strategy."),
+    ] = "scaffold",
+    split_seed: Annotated[int, typer.Option(help="Immutable partition seed.")] = 42,
+    model_seeds: Annotated[
+        str,
+        typer.Option(help="Comma-separated model training seeds."),
+    ] = "42,43,44",
+    model_name: Annotated[
+        Literal["gcn", "gin"],
+        typer.Option(help="Graph neural network architecture."),
+    ] = "gcn",
+    epochs: Annotated[int, typer.Option(help="Maximum training epochs.")] = 50,
+    overwrite: Annotated[
+        bool,
+        typer.Option(help="Replace cached ensemble artifacts."),
+    ] = False,
+) -> None:
+    """Train and evaluate a multi-seed GNN ensemble on one immutable split."""
+    summary = run_fixed_split_gnn_ensemble(
+        dataset_name,
+        output_dir,
+        split_strategy=split_strategy,
+        split_seed=split_seed,
+        model_seeds=_parse_seeds(model_seeds),
+        model_name=model_name,
+        epochs=epochs,
+        overwrite=overwrite,
+    )
+    audit = summary["duplicate_audit"]
+    uncertainty = summary["uncertainty"]
+    console.print("[bold]Completed fixed-split GNN ensemble[/bold]")
+    console.print(f"Split seed: {summary['split_seed']}")
+    console.print(f"Model seeds: {summary['model_seeds']}")
+    counts = summary["split_counts"]
+    console.print(f"Train/val/test: {counts['train']}/{counts['val']}/{counts['test']}")
+    console.print(
+        "Duplicate/conflicting canonical groups: "
+        f"{audit['duplicate_canonical_smiles_groups']}/"
+        f"{audit['duplicate_groups_with_conflicting_targets']}"
+    )
+    model_table = Table(title="Individual GNN models")
+    model_table.add_column("Model seed")
+    model_table.add_column("Test RMSE")
+    for model in summary["models"]:
+        model_table.add_row(
+            str(model["model_seed"]),
+            f"{model['test_metrics']['rmse']:.4f}",
+        )
+    console.print(model_table)
+    console.print(
+        f"Ensemble test RMSE: {uncertainty['ensemble_test_metrics']['rmse']:.4f}"
+    )
+    for result in uncertainty["interval_results"]:
+        console.print(
+            f"Coverage {result['target_coverage']:.0%}: "
+            f"empirical={result['empirical_coverage']:.4f}, "
+            f"mean width={result['mean_interval_width']:.4f}"
+        )
+    correlations = uncertainty["uncertainty_error_correlations"]
+    console.print(f"Uncertainty-error Pearson: {correlations['pearson']}")
+    console.print(f"Uncertainty-error rank: {correlations['spearman']}")
+    console.print(f"Summary: {summary['artifacts']['summary_json']}")
+    console.print(f"Report: {summary['artifacts']['report_md']}")
 
 
 @app.command("analyze-gnn-uncertainty")

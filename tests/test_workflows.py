@@ -118,7 +118,10 @@ def test_run_gnn_benchmark_with_local_dataset(tmp_path: Path, monkeypatch) -> No
         lambda name, overwrite=False: raw_csv,
     )
 
+    training_kwargs = {}
+
     def fake_training(graph_jsonl, output_dir, **kwargs):
+        training_kwargs.update(kwargs)
         output_dir.mkdir(parents=True, exist_ok=True)
         artifacts = {
             "model": str(output_dir / "model.pt"),
@@ -141,11 +144,17 @@ def test_run_gnn_benchmark_with_local_dataset(tmp_path: Path, monkeypatch) -> No
         "synthetic",
         output_dir,
         split_strategy="random",
+        split_seed=7,
+        model_seed=11,
         epochs=2,
         overwrite=True,
     )
 
     assert summary["model_name"] == "gcn"
     assert summary["test_rmse"] == 0.6
+    assert summary["split_seed"] == 7
+    assert summary["model_seed"] == 11
+    assert summary["preparation"]["split_seed"] == 7
+    assert training_kwargs["model_seed"] == 11
     assert Path(summary["graph_jsonl"]).is_file()
     assert Path(summary["summary_json"]).is_file()

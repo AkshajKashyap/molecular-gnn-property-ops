@@ -173,7 +173,7 @@ def write_gnn_report(metrics: dict, output_path: Path) -> None:
         "",
         f"- Dataset source: `{metrics['dataset_source']}`",
         f"- Device: `{metrics['device']}`",
-        f"- Seed: {metrics['seed']}",
+        f"- Model seed: {metrics.get('model_seed', metrics['seed'])}",
         f"- Best epoch: {metrics['best_epoch']}",
         "",
         "## Hyperparameters",
@@ -391,6 +391,82 @@ def write_gnn_uncertainty_report(
             "distribution shift.",
             "- ESOL is a small dataset.",
             "- The scaffold split is intentionally difficult.",
+        ]
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_fixed_split_ensemble_report(summary: dict, output_path: Path) -> None:
+    """Write a compact fixed-split ensemble integrity and performance report."""
+    audit = summary["duplicate_audit"]
+    uncertainty = summary["uncertainty"]
+    lines = [
+        "# Fixed-Split GNN Ensemble Report",
+        "",
+        f"- Dataset: `{summary['dataset_name']}`",
+        f"- Model: `{summary['model_name']}`",
+        f"- Split strategy: `{summary['split_strategy']}`",
+        f"- Split seed: {summary['split_seed']}",
+        f"- Model seeds: {', '.join(str(seed) for seed in summary['model_seeds'])}",
+        "",
+        "## Split Counts",
+        "",
+        f"- Train: {summary['split_counts']['train']}",
+        f"- Validation: {summary['split_counts']['val']}",
+        f"- Test: {summary['split_counts']['test']}",
+        "",
+        "## Duplicate Audit",
+        "",
+        f"- Duplicate canonical-SMILES groups: "
+        f"{audit['duplicate_canonical_smiles_groups']}",
+        f"- Rows in duplicate groups: {audit['rows_in_duplicate_groups']}",
+        f"- Identical-target groups: {audit['duplicate_groups_with_identical_targets']}",
+        f"- Conflicting-target groups: {audit['duplicate_groups_with_conflicting_targets']}",
+        "",
+        "Duplicate measurements are retained as distinct sample IDs; no targets are averaged "
+        "or deleted.",
+        "",
+        "## Individual Models",
+        "",
+        "| Model seed | Best epoch | Validation RMSE | Test RMSE |",
+        "| ---: | ---: | ---: | ---: |",
+    ]
+    for model in summary["models"]:
+        lines.append(
+            f"| {model['model_seed']} | {model['best_epoch']} | "
+            f"{_format_metric(model['validation_metrics'].get('rmse'))} | "
+            f"{_format_metric(model['test_metrics'].get('rmse'))} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Ensemble Uncertainty",
+            "",
+            f"- Test RMSE: {_format_metric(uncertainty['ensemble_test_metrics']['rmse'])}",
+            f"- Test MAE: {_format_metric(uncertainty['ensemble_test_metrics']['mae'])}",
+            "",
+            "| Nominal coverage | Empirical coverage | Mean interval width |",
+            "| ---: | ---: | ---: |",
+        ]
+    )
+    for result in uncertainty["interval_results"]:
+        lines.append(
+            f"| {_format_metric(result['target_coverage'])} | "
+            f"{_format_metric(result['empirical_coverage'])} | "
+            f"{_format_metric(result['mean_interval_width'])} |"
+        )
+    correlations = uncertainty["uncertainty_error_correlations"]
+    lines.extend(
+        [
+            "",
+            f"- Pearson uncertainty-error correlation: "
+            f"{_format_metric(correlations['pearson'])}",
+            f"- Rank uncertainty-error correlation: "
+            f"{_format_metric(correlations['spearman'])}",
+            "",
+            "All interval scales were fit on validation predictions and evaluated on test "
+            "predictions from the same immutable dataset partition.",
         ]
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
