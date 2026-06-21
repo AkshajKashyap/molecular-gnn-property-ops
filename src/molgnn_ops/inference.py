@@ -13,6 +13,7 @@ from molgnn_ops.gnn_data import molecule_graph_to_pyg_data
 from molgnn_ops.gnn_error_analysis import molecular_descriptors
 from molgnn_ops.gnn_models import GCNRegressor, GINRegressor
 from molgnn_ops.model_registry import ModelManifest
+from molgnn_ops.reference_index import ReferenceIndex, load_reference_index
 
 
 @dataclass
@@ -22,6 +23,7 @@ class LoadedPromotedModel:
     device: torch.device
     target_mean: float
     target_std: float
+    reference_index: ReferenceIndex | None = None
 
 
 def _current_feature_dimensions() -> tuple[int, int]:
@@ -86,12 +88,23 @@ def load_promoted_model(
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(resolved_device)
     model.eval()
+    reference_index = None
+    if manifest.reference_index_path is not None:
+        reference_path = manifest_path.parent / manifest.reference_index_path
+        reference_index = load_reference_index(reference_path)
+        if manifest.reference_index_size != len(reference_index):
+            raise ValueError("Reference index size does not match the model manifest")
+        if manifest.reference_index_radius != reference_index.radius:
+            raise ValueError("Reference index radius does not match the model manifest")
+        if manifest.reference_index_n_bits != reference_index.n_bits:
+            raise ValueError("Reference index bit count does not match the model manifest")
     return LoadedPromotedModel(
         manifest=manifest,
         model=model,
         device=resolved_device,
         target_mean=float(checkpoint["target_mean"]),
         target_std=float(checkpoint["target_std"]),
+        reference_index=reference_index,
     )
 
 
@@ -108,7 +121,13 @@ def _prediction_warnings(smiles: str, dataset_name: str) -> list[str]:
     return warnings
 
 
-def predict_smiles(smiles: str, loaded_model: LoadedPromotedModel) -> dict:
+def predict_smiles(
+    smiles: str,
+    loaded_model: LoadedPromotedModel,
+    *,
+    include_applicability: bool = False,
+    top_k: int = 5,
+) -> dict:
     """Predict aqueous log solubility for one valid SMILES string."""
     if not isinstance(smiles, str) or not smiles.strip():
         raise ValueError("SMILES must not be blank")
@@ -122,7 +141,7 @@ def predict_smiles(smiles: str, loaded_model: LoadedPromotedModel) -> dict:
     molar_solubility = 10.0**log_solubility
     if not math.isfinite(log_solubility) or not math.isfinite(molar_solubility):
         raise RuntimeError("Model produced a non-finite solubility prediction")
-    return {
+    result = {
         "input_smiles": smiles,
         "canonical_smiles": graph.canonical_smiles,
         "predicted_log_solubility": float(log_solubility),
@@ -134,6 +153,45 @@ def predict_smiles(smiles: str, loaded_model: LoadedPromotedModel) -> dict:
             graph.canonical_smiles,
             loaded_model.manifest.dataset_name,
         ),
+    }
+    if include_applicability and loaded_model.reference_index is not None:
+        from molgnn_ops.applicability import molecule_context
+
+        context = molecule_context(
+            graph.canonical_smiles,
+            loaded_model.reference_index,
+            top_k=top_k,
+        )
+        result["applicability"] = {
+            "maximum_similarity": context["maximum_similarity"],
+            "mean_top_k_similarity": context["mean_top_k_similarity"],
+            "warnings": context["warnings"],
+        }
+    return result
+
+
+def predict_smiles_with_context(
+    smiles: str,
+    loaded_model: LoadedPromotedModel,
+    top_k: int = 5,
+) -> dict:
+    """Predict one molecule and return training-set applicability context."""
+    from molgnn_ops.applicability import molecule_context
+
+    if loaded_model.reference_index is None:
+        raise ValueError("The promoted model has no training reference index")
+    prediction = predict_smiles(smiles, loaded_model)
+    context = molecule_context(smiles, loaded_model.reference_index, top_k=top_k)
+    return {
+        "prediction": prediction,
+        "molecular_descriptors": context["query_descriptors"],
+        "applicability": {
+            "maximum_similarity": context["maximum_similarity"],
+            "mean_top_k_similarity": context["mean_top_k_similarity"],
+            "descriptor_ranges": context["descriptor_ranges"],
+            "warnings": context["warnings"],
+        },
+        "nearest_training_molecules": context["nearest_neighbors"],
     }
 
 

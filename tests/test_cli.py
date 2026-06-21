@@ -498,16 +498,25 @@ def test_promote_model_command_smoke(tmp_path: Path, monkeypatch) -> None:
 
     captured = {}
 
-    def fake_promote(candidate_run_dirs, registry_dir, model_id, metric):
+    def fake_promote(
+        candidate_run_dirs,
+        registry_dir,
+        model_id,
+        metric,
+        prepared_csv,
+        include_reference_index,
+    ):
         captured["candidate_run_dirs"] = candidate_run_dirs
         captured["registry_dir"] = registry_dir
         captured["model_id"] = model_id
         captured["metric"] = metric
+        captured["include_reference_index"] = include_reference_index
         return SimpleNamespace(
             model_id=model_id,
             model_seed=43,
             validation_metrics={"rmse": 1.2},
             test_metrics={"rmse": 1.4},
+            reference_index_size=10,
         )
 
     monkeypatch.setattr(cli_module, "promote_model", fake_promote)
@@ -526,6 +535,7 @@ def test_promote_model_command_smoke(tmp_path: Path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert captured["candidate_run_dirs"] == candidates
     assert captured["metric"] == "rmse"
+    assert captured["include_reference_index"] is True
     assert "Selected model seed: 43" in result.output
 
 
@@ -586,3 +596,33 @@ def test_serve_api_command_imports_and_runs(tmp_path: Path, monkeypatch) -> None
 
     assert result.exit_code == 0
     assert captured == {"app": fake_app, "host": "127.0.0.1", "port": 9000}
+
+
+def test_run_dashboard_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("{}", encoding="utf-8")
+    captured = {}
+
+    def fake_run(command, check, env):
+        captured.update({"command": command, "check": check, "env": env})
+
+    monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "run-dashboard",
+            str(manifest_path),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "8600",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["check"] is True
+    assert captured["env"]["MOLGNN_MANIFEST_PATH"] == str(manifest_path.resolve())
+    assert "streamlit" in captured["command"]
+    assert "8600" in captured["command"]

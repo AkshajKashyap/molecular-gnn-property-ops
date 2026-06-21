@@ -8,6 +8,8 @@ from molgnn_ops.api_schemas import (
     BatchPredictionItem,
     BatchPredictionRequest,
     ModelInfoResponse,
+    PredictionContextRequest,
+    PredictionContextResponse,
     PredictionRequest,
     PredictionResponse,
 )
@@ -16,6 +18,7 @@ from molgnn_ops.inference import (
     load_promoted_model,
     predict_smiles,
     predict_smiles_batch,
+    predict_smiles_with_context,
 )
 
 
@@ -56,6 +59,18 @@ def _model_info(loaded_model: LoadedPromotedModel) -> ModelInfoResponse:
             "post_selection_test_metrics": manifest.test_metrics,
             "uncertainty_exposed": False,
         },
+        reference_index_available=loaded_model.reference_index is not None,
+        reference_set_size=manifest.reference_index_size,
+        similarity_method=(
+            "Morgan fingerprint Tanimoto similarity"
+            if loaded_model.reference_index is not None
+            else None
+        ),
+        applicability_limitations=[
+            "Structural similarity is not a probability or a reliability guarantee.",
+            "Similar molecules can still have different measured solubility.",
+            "Low similarity does not prove that a prediction is wrong.",
+        ],
     )
 
 
@@ -108,5 +123,26 @@ def create_app(manifest_path: Path | None = None) -> FastAPI:
     ) -> list[BatchPredictionItem]:
         results = predict_smiles_batch(payload.smiles, _require_model(request))
         return [BatchPredictionItem.model_validate(result) for result in results]
+
+    @app.post("/predict/context", response_model=PredictionContextResponse)
+    async def predict_context(
+        payload: PredictionContextRequest,
+        request: Request,
+    ) -> PredictionContextResponse:
+        loaded_model = _require_model(request)
+        if loaded_model.reference_index is None:
+            raise HTTPException(
+                status_code=409,
+                detail="The promoted model has no training reference index",
+            )
+        try:
+            result = predict_smiles_with_context(
+                payload.smiles,
+                loaded_model,
+                top_k=payload.top_k,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return PredictionContextResponse.model_validate(result)
 
     return app

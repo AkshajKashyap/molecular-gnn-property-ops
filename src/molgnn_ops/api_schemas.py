@@ -18,6 +18,10 @@ class BatchPredictionRequest(BaseModel):
     smiles: list[str] = Field(min_length=1, max_length=100)
 
 
+class PredictionContextRequest(PredictionRequest):
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
 class PredictionResponse(BaseModel):
     input_smiles: str
     canonical_smiles: str
@@ -36,6 +40,20 @@ class BatchPredictionItem(BaseModel):
     error: str | None = None
 
 
+class ApplicabilitySummary(BaseModel):
+    maximum_similarity: float
+    mean_top_k_similarity: float
+    descriptor_ranges: dict[str, dict[str, float]]
+    warnings: list[str]
+
+
+class PredictionContextResponse(BaseModel):
+    prediction: PredictionResponse
+    molecular_descriptors: dict[str, float | int]
+    applicability: ApplicabilitySummary
+    nearest_training_molecules: list[dict[str, Any]]
+
+
 class ModelInfoResponse(BaseModel):
     model_id: str
     model_type: str
@@ -50,3 +68,7 @@ class ModelInfoResponse(BaseModel):
     test_metrics: dict[str, float | None]
     known_limitations: list[str]
     benchmark_summary: dict[str, Any]
+    reference_index_available: bool
+    reference_set_size: int | None = None
+    similarity_method: str | None = None
+    applicability_limitations: list[str]

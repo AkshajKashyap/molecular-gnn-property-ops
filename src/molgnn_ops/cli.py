@@ -1,4 +1,7 @@
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -660,6 +663,17 @@ def promote_model_command(
         "esol-gcn-v1"
     ),
     metric: Annotated[str, typer.Option(help="Validation selection metric.")] = "rmse",
+    prepared_csv: Annotated[
+        Path | None,
+        typer.Option(help="Prepared dataset used to build a training reference index."),
+    ] = None,
+    include_reference_index: Annotated[
+        bool,
+        typer.Option(
+            "--include-reference-index/--no-reference-index",
+            help="Package a training-split similarity reference index.",
+        ),
+    ] = True,
 ) -> None:
     """Select a model by validation metrics and package it for inference."""
     manifest = promote_model(
@@ -667,6 +681,8 @@ def promote_model_command(
         registry_dir,
         model_id=model_id,
         metric=metric,
+        prepared_csv=prepared_csv,
+        include_reference_index=include_reference_index,
     )
     console.print("[bold]Promoted model[/bold]")
     console.print(f"Model ID: {manifest.model_id}")
@@ -674,6 +690,7 @@ def promote_model_command(
     console.print(f"Validation {metric}: {manifest.validation_metrics.get(metric)}")
     console.print(f"Post-selection test {metric}: {manifest.test_metrics.get(metric)}")
     console.print(f"Manifest: {registry_dir / 'manifest.json'}")
+    console.print(f"Reference index size: {manifest.reference_index_size}")
 
 
 @app.command("predict-smiles")
@@ -718,6 +735,37 @@ def serve_api_command(
     from molgnn_ops.api import create_app
 
     uvicorn.run(create_app(manifest_path), host=host, port=port)
+
+
+@app.command("run-dashboard")
+def run_dashboard_command(
+    manifest_path: Annotated[Path, typer.Argument(help="Promoted model manifest.")],
+    host: Annotated[str, typer.Option(help="Interface to bind.")] = "0.0.0.0",
+    port: Annotated[int, typer.Option(help="Streamlit port.")] = 8501,
+) -> None:
+    """Launch the Streamlit molecule explorer for a promoted model."""
+    if not manifest_path.is_file():
+        raise typer.BadParameter(f"Model manifest does not exist: {manifest_path}")
+    environment = os.environ.copy()
+    environment["MOLGNN_MANIFEST_PATH"] = str(manifest_path.resolve())
+    dashboard_path = Path(__file__).with_name("dashboard.py")
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            str(dashboard_path),
+            "--server.address",
+            host,
+            "--server.port",
+            str(port),
+            "--server.headless",
+            "true",
+        ],
+        check=True,
+        env=environment,
+    )
 
 
 if __name__ == "__main__":

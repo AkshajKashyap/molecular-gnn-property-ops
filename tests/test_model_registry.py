@@ -52,6 +52,10 @@ def test_promoted_package_is_self_contained(
     assert manifest.validation_metrics["rmse"] == 0.8
     assert manifest.test_metrics["rmse"] == 1.5
     assert (registry_dir / manifest.checkpoint_path).is_file()
+    assert manifest.reference_index_path is not None
+    assert not Path(manifest.reference_index_path).is_absolute()
+    assert (registry_dir / manifest.reference_index_path).is_file()
+    assert manifest.reference_index_size == 3
     assert (registry_dir / "manifest.json").is_file()
     assert (registry_dir / "selection_report.md").is_file()
     assert ranking["model_seed"].tolist() == [12, 11, 13]
@@ -63,3 +67,21 @@ def test_promoted_package_is_self_contained(
         (registry_dir / "manifest.json").read_text(encoding="utf-8")
     )
     assert not Path(saved_manifest.checkpoint_path).is_absolute()
+
+
+def test_promoted_model_can_omit_reference_index(
+    tmp_path: Path,
+    synthetic_candidate_dirs: list[Path],
+) -> None:
+    registry_dir = tmp_path / "registry-without-reference"
+    manifest = promote_model(
+        synthetic_candidate_dirs,
+        registry_dir,
+        model_id="synthetic-gcn-minimal",
+        include_reference_index=False,
+    )
+
+    assert manifest.reference_index_path is None
+    assert manifest.reference_index_size is None
+    loaded = load_promoted_model(registry_dir / "manifest.json")
+    assert loaded.reference_index is None

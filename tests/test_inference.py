@@ -7,6 +7,7 @@ from molgnn_ops.inference import (
     load_promoted_model,
     predict_smiles,
     predict_smiles_batch,
+    predict_smiles_with_context,
 )
 
 
@@ -23,6 +24,39 @@ def test_promoted_gcn_loads_and_predicts(promoted_manifest_path: Path) -> None:
     assert prediction["model_id"] == "synthetic-gcn-v1"
     assert "uncertainty" not in prediction
     assert all("uncertainty" not in key for key in prediction)
+    assert "nearest_training_molecules" not in prediction
+
+
+def test_prediction_with_context_returns_neighbors_without_uncertainty(
+    promoted_manifest_path: Path,
+) -> None:
+    loaded = load_promoted_model(promoted_manifest_path)
+    result = predict_smiles_with_context("CCO", loaded, top_k=2)
+
+    assert set(result) == {
+        "prediction",
+        "molecular_descriptors",
+        "applicability",
+        "nearest_training_molecules",
+    }
+    assert result["applicability"]["maximum_similarity"] == pytest.approx(1.0)
+    assert len(result["nearest_training_molecules"]) == 2
+    assert "uncertainty" not in str(result).lower()
+
+
+def test_standard_prediction_can_include_compact_applicability(
+    promoted_manifest_path: Path,
+) -> None:
+    loaded = load_promoted_model(promoted_manifest_path)
+    prediction = predict_smiles(
+        "CCO",
+        loaded,
+        include_applicability=True,
+        top_k=2,
+    )
+
+    assert prediction["applicability"]["maximum_similarity"] == pytest.approx(1.0)
+    assert "nearest_training_molecules" not in prediction
 
 
 def test_invalid_smiles_raises_clear_error(promoted_manifest_path: Path) -> None:

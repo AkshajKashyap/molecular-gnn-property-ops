@@ -84,8 +84,18 @@ seed-dependent partitions and ambiguous SMILES-only alignment.
 - FastAPI health, model metadata, prediction, and batch endpoints
 - Explicit chemical-space and reliability limitations with unsupported uncertainty omitted
 
+### Milestone 11: Molecule explorer and applicability context
+
+- Training-only Morgan fingerprint reference index with duplicate samples preserved
+- Tanimoto nearest-neighbor search and descriptor-range applicability warnings
+- Contextual inference and `POST /predict/context` API support
+- Streamlit molecule rendering, descriptors, predictions, and nearest-neighbor exploration
+- Explicit separation between structural similarity, uncertainty, and reliability
+
 ## Future milestones
 
-11. Streamlit molecule explorer.
-12. Docker and CI.
-13. Final model card and portfolio documentation.
+12. Docker.
+13. CI matrix and smoke tests.
+14. Final model card.
+15. Tracked portfolio reports.
+16. Release and versioning.

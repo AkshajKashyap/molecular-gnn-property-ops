@@ -22,6 +22,7 @@ analysis without treating the resulting intervals as formal guarantees.
 Milestone 9.5 completes that work with stable sample identity and multiple GCNs trained
 against one immutable scaffold split.
 Milestone 10 adds validation-only model promotion and FastAPI molecular solubility inference.
+Milestone 11 adds a Streamlit molecule explorer and training-set applicability context.
 
 ## Milestone 2 Splits
 
@@ -163,6 +164,26 @@ required very wide intervals for coverage. This API therefore exposes no uncerta
 It is a research and portfolio service, not a medical, pharmaceutical, laboratory-grade, or
 safety-critical prediction system.
 
+## Milestone 11 Molecule Explorer and Applicability Context
+
+The promoted package now includes a compact reference index containing every training sample,
+including duplicate canonical molecules with distinct sample IDs and conflicting measured
+targets. Morgan fingerprints encode local atom environments, and Tanimoto similarity ranks
+the query against those training fingerprints. The nearest molecules help users inspect
+whether the query resembles examples seen during training.
+
+Similarity is applicability context, not uncertainty, probability, or a reliability
+guarantee. High similarity does not guarantee an accurate solubility estimate, similar
+molecules can have different measured properties, and low similarity does not prove that a
+prediction is wrong. Deterministic warnings flag low structural similarity and molecular
+descriptors outside the observed training ranges without exposing the failed ensemble
+disagreement signal.
+
+The Streamlit explorer renders the query molecule, displays predicted log and molar
+solubility, summarizes molecular descriptors and applicability warnings, and lists or renders
+the nearest training molecules. The same information is available programmatically from
+`POST /predict/context`; existing prediction endpoints remain unchanged.
+
 ## Installation
 
 Create and activate a Python 3.11+ virtual environment, then install the project in editable
@@ -184,6 +205,12 @@ Install the GNN and API extras together for model serving:
 
 ```bash
 python -m pip install -e ".[gnn,api]"
+```
+
+Install all model-serving and dashboard extras together:
+
+```bash
+python -m pip install -e ".[gnn,api,dashboard]"
 ```
 
 ## Tests and Linting
@@ -406,3 +433,26 @@ curl -X POST http://localhost:8000/predict \
 
 Batch prediction is available at `POST /predict/batch` with a JSON body such as
 `{"smiles":["CCO","CCN","invalid"]}`.
+
+Re-promote the ESOL model with its training reference index, then launch the explorer:
+
+```bash
+bash scripts/promote_esol_gcn.sh
+bash scripts/run_esol_dashboard.sh
+```
+
+Run Streamlit directly with a custom port:
+
+```bash
+molgnn-ops run-dashboard \
+  artifacts/registry/esol-gcn-v1/manifest.json \
+  --port 8501
+```
+
+Request prediction plus applicability context from the API:
+
+```bash
+curl -X POST http://localhost:8000/predict/context \
+  -H "Content-Type: application/json" \
+  -d '{"smiles":"CCO","top_k":5}'
+```

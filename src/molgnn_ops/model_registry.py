@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from molgnn_ops.data_sources import get_dataset_spec
 from molgnn_ops.featurization import ATOM_FEATURE_CONFIG, BOND_FEATURE_CONFIG
+from molgnn_ops.reference_index import build_reference_index
 
 
 class ModelManifest(BaseModel):
@@ -36,6 +37,10 @@ class ModelManifest(BaseModel):
     package_version: str
     git_commit: str | None = None
     notes: list[str] = Field(default_factory=list)
+    reference_index_path: str | None = None
+    reference_index_radius: int | None = None
+    reference_index_n_bits: int | None = None
+    reference_index_size: int | None = None
 
 
 def _read_json(path: Path) -> dict:
@@ -177,6 +182,8 @@ def promote_model(
     registry_dir: Path,
     model_id: str,
     metric: str = "rmse",
+    prepared_csv: Path | None = None,
+    include_reference_index: bool = True,
 ) -> ModelManifest:
     """Select by validation performance and create a self-contained model package."""
     if not model_id.strip():
@@ -239,6 +246,22 @@ def promote_model(
         )
 
     relative_checkpoint = destination_checkpoint.relative_to(registry_dir).as_posix()
+    reference_summary = None
+    reference_index_path = None
+    if include_reference_index:
+        resolved_prepared_csv = prepared_csv or Path(selected["run_dir"]).parent / "prepared.csv"
+        if not resolved_prepared_csv.is_file():
+            raise FileNotFoundError(
+                "Prepared CSV is required to build the promoted reference index: "
+                f"{resolved_prepared_csv}"
+            )
+        reference_artifact = model_dir / "reference_index.npz"
+        reference_summary = build_reference_index(
+            resolved_prepared_csv,
+            reference_artifact,
+            split="train",
+        )
+        reference_index_path = reference_artifact.relative_to(registry_dir).as_posix()
     manifest = ModelManifest(
         model_id=model_id,
         model_type=str(checkpoint["model_name"]),
@@ -272,6 +295,18 @@ def promote_model(
             "Test metrics are post-selection reporting and were not used for promotion.",
             "Ensemble disagreement was not a useful uncertainty signal and is not exposed.",
         ],
+        reference_index_path=reference_index_path,
+        reference_index_radius=(
+            reference_summary["radius"] if reference_summary is not None else None
+        ),
+        reference_index_n_bits=(
+            reference_summary["n_bits"] if reference_summary is not None else None
+        ),
+        reference_index_size=(
+            reference_summary["n_reference_molecules"]
+            if reference_summary is not None
+            else None
+        ),
     )
     manifest_path = registry_dir / "manifest.json"
     manifest_path.write_text(

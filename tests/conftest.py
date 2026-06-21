@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import torch
 
@@ -22,6 +23,16 @@ def synthetic_candidate_dirs(tmp_path: Path) -> list[Path]:
         ),
         encoding="utf-8",
     )
+    pd.DataFrame(
+        {
+            "sample_id": ["synthetic:0", "synthetic:1", "synthetic:2", "synthetic:3"],
+            "smiles": ["CCO", "OCC", "CCN", "c1ccccc1"],
+            "canonical_smiles": ["CCO", "CCO", "CCN", "c1ccccc1"],
+            "target": [-0.7, -0.8, -0.5, -2.0],
+            "dataset_name": ["synthetic"] * 4,
+            "split": ["train", "train", "train", "test"],
+        }
+    ).to_csv(run_root / "prepared.csv", index=False)
     candidates = []
     configurations = [
         (11, 1.0, 0.5),
