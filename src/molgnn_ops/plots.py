@@ -97,3 +97,57 @@ def plot_test_similarity_histogram(prepared_csv: Path, output_path: Path) -> Non
     axis.set_xlabel("Maximum Tanimoto similarity")
     axis.set_ylabel("Test molecule count")
     _save_figure(figure, output_path)
+
+
+def plot_gnn_rmse_by_model(comparison_csv: Path, output_path: Path) -> None:
+    """Plot mean test RMSE by model with one standard deviation error bars."""
+    dataframe = pd.read_csv(comparison_csv)
+    required_columns = {"model_name", "test_rmse"}
+    if not required_columns <= set(dataframe.columns):
+        raise ValueError("Comparison CSV must contain model_name and test_rmse columns")
+    grouped = dataframe.groupby("model_name", sort=True)["test_rmse"]
+    means = grouped.mean()
+    standard_deviations = grouped.std(ddof=0)
+
+    plt = _get_pyplot()
+    figure, axis = plt.subplots(figsize=(7, 5))
+    axis.bar(
+        means.index.tolist(),
+        means.to_numpy(),
+        yerr=standard_deviations.to_numpy(),
+        capsize=4,
+    )
+    axis.set_title("Repeated-Seed GNN Test RMSE")
+    axis.set_xlabel("Model")
+    axis.set_ylabel("Test RMSE")
+    _save_figure(figure, output_path)
+
+
+def plot_gnn_metric_by_seed(
+    comparison_csv: Path,
+    output_path: Path,
+    metric: str = "test_rmse",
+) -> None:
+    """Plot one comparison metric across seeds for every GNN model."""
+    dataframe = pd.read_csv(comparison_csv)
+    required_columns = {"model_name", "seed", metric}
+    if not required_columns <= set(dataframe.columns):
+        raise ValueError(
+            "Comparison CSV must contain model_name, seed, and " f"{metric} columns"
+        )
+
+    plt = _get_pyplot()
+    figure, axis = plt.subplots(figsize=(7, 5))
+    for model_name, model_frame in dataframe.groupby("model_name", sort=True):
+        ordered = model_frame.sort_values("seed")
+        axis.plot(
+            ordered["seed"],
+            ordered[metric],
+            marker="o",
+            label=str(model_name),
+        )
+    axis.set_title(f"{metric.replace('_', ' ').title()} by Seed")
+    axis.set_xlabel("Seed")
+    axis.set_ylabel(metric.replace("_", " ").title())
+    axis.legend()
+    _save_figure(figure, output_path)

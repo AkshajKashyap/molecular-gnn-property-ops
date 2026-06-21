@@ -304,3 +304,59 @@ def test_run_gnn_benchmark_command_smoke(tmp_path: Path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Completed molecular GNN benchmark" in result.output
     assert "Test RMSE: 1.4" in result.output
+
+
+def test_compare_gnns_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    captured = {}
+
+    def fake_comparison(*args, **kwargs):
+        captured.update(kwargs)
+        return {
+            "by_model": {
+                "gcn": {
+                    "n_runs": 2,
+                    "mean_test_rmse": 1.2,
+                    "std_test_rmse": 0.1,
+                    "mean_test_mae": 0.9,
+                    "std_test_mae": 0.05,
+                    "mean_test_r2": 0.4,
+                    "std_test_r2": 0.02,
+                },
+                "gin": {
+                    "n_runs": 2,
+                    "mean_test_rmse": 1.4,
+                    "std_test_rmse": 0.2,
+                    "mean_test_mae": 1.0,
+                    "std_test_mae": 0.1,
+                    "mean_test_r2": 0.2,
+                    "std_test_r2": 0.08,
+                },
+            },
+            "best_mean_model": "gcn",
+            "comparison_metrics_csv": str(tmp_path / "metrics.csv"),
+            "comparison_summary_json": str(tmp_path / "summary.json"),
+            "comparison_report_md": str(tmp_path / "report.md"),
+        }
+
+    monkeypatch.setattr(cli_module, "run_gnn_comparison", fake_comparison)
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "compare-gnns",
+            "esol",
+            str(tmp_path),
+            "--models",
+            "gcn,gin",
+            "--seeds",
+            "42,43",
+            "--epochs",
+            "2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["model_names"] == ["gcn", "gin"]
+    assert captured["seeds"] == [42, 43]
+    assert "Best mean model: gcn" in result.output

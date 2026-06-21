@@ -15,6 +15,8 @@ does not include tensor conversion. Milestone 4 adds classical Morgan fingerprin
 before any neural network training. Milestone 5 adds a reproducible real-data benchmark
 workflow using ESOL/Delaney. Milestone 6 adds benchmark diagnostics and seeded split
 comparison. Milestone 7 adds the first small GCN and GIN molecular graph baselines.
+Milestone 8 compares those architectures across repeated seeds and reports their
+aggregate performance alongside the fingerprint baseline when it is available.
 
 ## Milestone 2 Splits
 
@@ -86,6 +88,18 @@ These models intentionally remain simple. The scaffold-split Morgan random fores
 the comparison point, and GNN results are reported without assuming that added complexity
 will improve RMSE. Bond features are preserved in the graph data, but these first GCN/GIN
 operators use graph connectivity and atom features only.
+
+## Milestone 8 Repeated-Seed GNN Comparison
+
+Repeated seeds expose sensitivity to parameter initialization, batch ordering, and the
+seed-dependent scaffold assignment. A single favorable result is weaker evidence than a
+consistent mean and standard deviation across repeated runs.
+
+The comparison workflow runs GCN and GIN under the same configuration, preserves every run,
+and writes CSV, JSON, Markdown, and matplotlib figures. It reports mean and standard deviation
+for test RMSE, MAE, and R2 without hiding weak GIN results or unstable seeds. When nearby
+fingerprint split-comparison metrics exist, the report includes them in a separate baseline
+section.
 
 ## Installation
 
@@ -224,4 +238,21 @@ Equivalent reproducible scripts are available for both architectures:
 ```bash
 bash scripts/run_esol_gcn_benchmark.sh
 bash scripts/run_esol_gin_benchmark.sh
+```
+
+Compare both architectures on the ESOL scaffold split across three seeds:
+
+```bash
+molgnn-ops compare-gnns esol artifacts/benchmarks/esol/gnn_comparison \
+  --models gcn,gin \
+  --seeds 42,43,44 \
+  --split-strategy scaffold \
+  --epochs 50 \
+  --overwrite
+```
+
+The reproducible wrapper runs the same command:
+
+```bash
+bash scripts/run_esol_gnn_comparison.sh
 ```

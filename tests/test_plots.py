@@ -4,6 +4,8 @@ import pandas as pd
 
 from molgnn_ops.plots import (
     plot_absolute_error_histogram,
+    plot_gnn_metric_by_seed,
+    plot_gnn_rmse_by_model,
     plot_predicted_vs_actual,
     plot_target_distribution,
     plot_test_similarity_histogram,
@@ -41,3 +43,23 @@ def test_diagnostic_plots_create_files(tmp_path: Path) -> None:
     plot_test_similarity_histogram(prepared_csv, output_paths[3])
 
     assert all(path.is_file() and path.stat().st_size > 0 for path in output_paths)
+
+
+def test_gnn_comparison_plots_create_files(tmp_path: Path) -> None:
+    comparison_csv = tmp_path / "comparison.csv"
+    pd.DataFrame(
+        {
+            "model_name": ["gcn", "gcn", "gin", "gin"],
+            "seed": [42, 43, 42, 43],
+            "test_rmse": [1.1, 1.3, 1.4, 1.2],
+            "test_mae": [0.8, 0.9, 1.0, 0.9],
+        }
+    ).to_csv(comparison_csv, index=False)
+    rmse_path = tmp_path / "figures" / "rmse.png"
+    seed_path = tmp_path / "figures" / "mae_by_seed.png"
+
+    plot_gnn_rmse_by_model(comparison_csv, rmse_path)
+    plot_gnn_metric_by_seed(comparison_csv, seed_path, metric="test_mae")
+
+    assert rmse_path.is_file() and rmse_path.stat().st_size > 0
+    assert seed_path.is_file() and seed_path.stat().st_size > 0

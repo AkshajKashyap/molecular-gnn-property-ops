@@ -20,6 +20,7 @@ from molgnn_ops.diagnostics import (
 from molgnn_ops.download import download_dataset
 from molgnn_ops.featurization import featurize_records_from_csv
 from molgnn_ops.fingerprints import featurize_fingerprints_from_csv
+from molgnn_ops.gnn_compare import run_gnn_comparison
 from molgnn_ops.paths import ARTIFACTS_DIR, ensure_project_dirs
 from molgnn_ops.prep import prepare_dataset
 from molgnn_ops.reporting import write_diagnostics_report
@@ -306,6 +307,18 @@ def _parse_seeds(value: str) -> list[int]:
     return seeds
 
 
+def _parse_model_names(value: str) -> list[str]:
+    model_names = [item.strip().lower() for item in value.split(",") if item.strip()]
+    invalid = sorted(set(model_names).difference({"gcn", "gin"}))
+    if not model_names:
+        raise typer.BadParameter("at least one model is required")
+    if invalid:
+        raise typer.BadParameter("models must be gcn and/or gin")
+    if len(set(model_names)) != len(model_names):
+        raise typer.BadParameter("models must not contain duplicates")
+    return model_names
+
+
 def _parse_split_strategies(value: str) -> list[str]:
     strategies = [item.strip().lower() for item in value.split(",") if item.strip()]
     invalid = sorted(set(strategies).difference({"random", "scaffold"}))
@@ -426,6 +439,60 @@ def run_gnn_benchmark_command(
     console.print(f"Metrics: {summary['metrics_json']}")
     console.print(f"Report: {summary['report_md']}")
     console.print(f"Summary: {summary['summary_json']}")
+
+
+@app.command("compare-gnns")
+def compare_gnns(
+    dataset_name: Annotated[str, typer.Argument(help="Registered regression dataset.")],
+    output_dir: Annotated[Path, typer.Argument(help="Comparison artifact directory.")],
+    models: Annotated[str, typer.Option(help="Comma-separated GNN models.")] = "gcn,gin",
+    seeds: Annotated[str, typer.Option(help="Comma-separated random seeds.")] = "42,43,44",
+    split_strategy: Annotated[
+        Literal["random", "scaffold"],
+        typer.Option(help="Dataset split strategy."),
+    ] = "scaffold",
+    epochs: Annotated[int, typer.Option(help="Maximum training epochs.")] = 50,
+    hidden_dim: Annotated[int, typer.Option(help="Hidden feature width.")] = 64,
+    num_layers: Annotated[int, typer.Option(help="Message-passing layer count.")] = 3,
+    dropout: Annotated[float, typer.Option(help="Dropout probability.")] = 0.1,
+    overwrite: Annotated[
+        bool,
+        typer.Option(help="Replace cached benchmark artifacts."),
+    ] = False,
+) -> None:
+    """Compare GCN and GIN benchmarks across repeated seeds."""
+    summary = run_gnn_comparison(
+        dataset_name,
+        output_dir,
+        model_names=_parse_model_names(models),
+        seeds=_parse_seeds(seeds),
+        split_strategy=split_strategy,
+        epochs=epochs,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
+        dropout=dropout,
+        overwrite=overwrite,
+    )
+
+    table = Table(title="Repeated-seed GNN comparison")
+    table.add_column("Model")
+    table.add_column("Runs", justify="right")
+    table.add_column("Test RMSE", justify="right")
+    table.add_column("Test MAE", justify="right")
+    table.add_column("Test R2", justify="right")
+    for model_name, values in summary["by_model"].items():
+        table.add_row(
+            model_name.upper(),
+            str(values["n_runs"]),
+            f"{values['mean_test_rmse']:.4f} +/- {values['std_test_rmse']:.4f}",
+            f"{values['mean_test_mae']:.4f} +/- {values['std_test_mae']:.4f}",
+            f"{values['mean_test_r2']:.4f} +/- {values['std_test_r2']:.4f}",
+        )
+    console.print(table)
+    console.print(f"Best mean model: {summary['best_mean_model']}")
+    console.print(f"Metrics: {summary['comparison_metrics_csv']}")
+    console.print(f"Summary: {summary['comparison_summary_json']}")
+    console.print(f"Report: {summary['comparison_report_md']}")
 
 
 if __name__ == "__main__":

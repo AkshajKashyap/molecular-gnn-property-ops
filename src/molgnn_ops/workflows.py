@@ -112,6 +112,9 @@ def run_gnn_benchmark(
     model_name: str = "gcn",
     seed: int = 42,
     epochs: int = 50,
+    hidden_dim: int = 64,
+    num_layers: int = 3,
+    dropout: float = 0.1,
     overwrite: bool = False,
 ) -> dict:
     """Run the complete download-to-report molecular GNN benchmark workflow."""
@@ -129,6 +132,9 @@ def run_gnn_benchmark(
             "model_name": model_name,
             "seed": seed,
             "epochs": epochs,
+            "hidden_dim": hidden_dim,
+            "num_layers": num_layers,
+            "dropout": dropout,
         }
         if any(cached_summary.get(key) != value for key, value in requested_config.items()):
             raise ValueError(
@@ -160,6 +166,9 @@ def run_gnn_benchmark(
         model_name=model_name,
         seed=seed,
         epochs=epochs,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
+        dropout=dropout,
     )
     artifacts = training_summary["artifacts"]
     summary = {
@@ -169,6 +178,9 @@ def run_gnn_benchmark(
         "model_name": model_name,
         "seed": seed,
         "epochs": epochs,
+        "hidden_dim": hidden_dim,
+        "num_layers": num_layers,
+        "dropout": dropout,
         "raw_csv": str(raw_csv),
         "prepared_csv": str(prepared_csv),
         "graph_jsonl": str(graph_jsonl),
@@ -180,6 +192,14 @@ def run_gnn_benchmark(
         "best_epoch": training_summary["best_epoch"],
         "best_val_rmse": training_summary["best_val_rmse"],
         "test_rmse": training_summary["test_rmse"],
+        "validation_metrics": training_summary.get(
+            "validation_metrics",
+            {"rmse": training_summary["best_val_rmse"]},
+        ),
+        "test_metrics": training_summary.get(
+            "test_metrics",
+            {"rmse": training_summary["test_rmse"]},
+        ),
         "fingerprint_comparison": training_summary["fingerprint_comparison"],
         "preparation": preparation_summary.model_dump(mode="json"),
         "graphs": graph_summary,

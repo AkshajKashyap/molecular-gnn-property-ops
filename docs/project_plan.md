@@ -51,12 +51,16 @@
 - Validation-selected training with early stopping and held-out evaluation
 - Reproducible ESOL GNN workflows and fingerprint-baseline comparison
 
+### Milestone 8: Repeated-seed GNN comparison
+
+- Repeated GCN and GIN benchmarks under matched hyperparameters
+- Mean and standard deviation for held-out RMSE, MAE, and R2
+- Optional nearby fingerprint baseline integration
+- Inspectable CSV, JSON, Markdown, and matplotlib comparison artifacts
+
 ## Future milestones
 
-8. GNN hyperparameter and architecture comparison.
-9. Random split vs scaffold split GNN evaluation.
-10. Calibration and uncertainty analysis.
-11. Extended error analysis reports.
-12. FastAPI inference endpoint.
-13. Streamlit molecule explorer.
-14. Docker, CI, and final portfolio polish.
+9. Uncertainty and calibration analysis.
+10. Extended GNN error analysis reports.
+11. FastAPI inference endpoint and Streamlit molecule explorer.
+12. Docker, CI, and final portfolio polish.
