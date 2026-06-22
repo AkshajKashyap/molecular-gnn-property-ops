@@ -598,6 +598,34 @@ def test_serve_api_command_imports_and_runs(tmp_path: Path, monkeypatch) -> None
     assert captured == {"app": fake_app, "host": "127.0.0.1", "port": 9000}
 
 
+def test_serve_api_command_uses_environment(tmp_path: Path, monkeypatch) -> None:
+    import uvicorn
+
+    from molgnn_ops import api as api_module
+    from molgnn_ops import cli as cli_module
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("{}", encoding="utf-8")
+    captured = {}
+    fake_app = object()
+    monkeypatch.setenv("MOLGNN_MANIFEST_PATH", str(manifest_path))
+    monkeypatch.setenv("API_HOST", "127.0.0.2")
+    monkeypatch.setenv("API_PORT", "9010")
+    monkeypatch.setattr(api_module, "create_app", lambda path: fake_app)
+    monkeypatch.setattr(
+        uvicorn,
+        "run",
+        lambda app, host, port: captured.update(
+            {"app": app, "host": host, "port": port}
+        ),
+    )
+
+    result = CliRunner().invoke(cli_module.app, ["serve-api"])
+
+    assert result.exit_code == 0
+    assert captured == {"app": fake_app, "host": "127.0.0.2", "port": 9010}
+
+
 def test_run_dashboard_command_smoke(tmp_path: Path, monkeypatch) -> None:
     from molgnn_ops import cli as cli_module
 
@@ -626,3 +654,29 @@ def test_run_dashboard_command_smoke(tmp_path: Path, monkeypatch) -> None:
     assert captured["env"]["MOLGNN_MANIFEST_PATH"] == str(manifest_path.resolve())
     assert "streamlit" in captured["command"]
     assert "8600" in captured["command"]
+
+
+def test_run_dashboard_command_uses_environment(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("{}", encoding="utf-8")
+    captured = {}
+    monkeypatch.setenv("MOLGNN_MANIFEST_PATH", str(manifest_path))
+    monkeypatch.setenv("DASHBOARD_HOST", "127.0.0.3")
+    monkeypatch.setenv("DASHBOARD_PORT", "8601")
+    monkeypatch.setattr(
+        cli_module.subprocess,
+        "run",
+        lambda command, check, env: captured.update(
+            {"command": command, "check": check, "env": env}
+        ),
+    )
+
+    result = CliRunner().invoke(cli_module.app, ["run-dashboard"])
+
+    assert result.exit_code == 0
+    assert captured["check"] is True
+    assert captured["env"]["MOLGNN_MANIFEST_PATH"] == str(manifest_path.resolve())
+    assert "127.0.0.3" in captured["command"]
+    assert "8601" in captured["command"]

@@ -28,6 +28,7 @@ from molgnn_ops.model_registry import promote_model
 from molgnn_ops.paths import ARTIFACTS_DIR, ensure_project_dirs
 from molgnn_ops.prep import prepare_dataset
 from molgnn_ops.reporting import write_diagnostics_report
+from molgnn_ops.service_config import resolve_host, resolve_manifest_path, resolve_port
 from molgnn_ops.workflows import (
     run_fingerprint_benchmark,
     run_fixed_split_gnn_ensemble,
@@ -723,31 +724,55 @@ def predict_smiles_command(
 
 @app.command("serve-api")
 def serve_api_command(
-    manifest_path: Annotated[Path, typer.Argument(help="Promoted model manifest.")],
-    host: Annotated[str, typer.Option(help="Interface to bind.")] = "0.0.0.0",
-    port: Annotated[int, typer.Option(help="TCP port.")] = 8000,
+    manifest_path: Annotated[
+        Path | None,
+        typer.Argument(help="Optional promoted model manifest."),
+    ] = None,
+    host: Annotated[str | None, typer.Option(help="Interface to bind.")] = None,
+    port: Annotated[int | None, typer.Option(help="TCP port.")] = None,
 ) -> None:
     """Serve the promoted molecular model through FastAPI."""
-    if not manifest_path.is_file():
-        raise typer.BadParameter(f"Model manifest does not exist: {manifest_path}")
+    resolved_manifest = resolve_manifest_path(manifest_path)
+    if resolved_manifest is not None and not resolved_manifest.is_file():
+        raise typer.BadParameter(f"Model manifest does not exist: {resolved_manifest}")
+    try:
+        resolved_host = resolve_host(host, "API_HOST", "0.0.0.0")
+        resolved_port = resolve_port(port, "API_PORT", 8000)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
     import uvicorn
 
     from molgnn_ops.api import create_app
 
-    uvicorn.run(create_app(manifest_path), host=host, port=port)
+    uvicorn.run(
+        create_app(resolved_manifest),
+        host=resolved_host,
+        port=resolved_port,
+    )
 
 
 @app.command("run-dashboard")
 def run_dashboard_command(
-    manifest_path: Annotated[Path, typer.Argument(help="Promoted model manifest.")],
-    host: Annotated[str, typer.Option(help="Interface to bind.")] = "0.0.0.0",
-    port: Annotated[int, typer.Option(help="Streamlit port.")] = 8501,
+    manifest_path: Annotated[
+        Path | None,
+        typer.Argument(help="Optional promoted model manifest."),
+    ] = None,
+    host: Annotated[str | None, typer.Option(help="Interface to bind.")] = None,
+    port: Annotated[int | None, typer.Option(help="Streamlit port.")] = None,
 ) -> None:
     """Launch the Streamlit molecule explorer for a promoted model."""
-    if not manifest_path.is_file():
-        raise typer.BadParameter(f"Model manifest does not exist: {manifest_path}")
+    resolved_manifest = resolve_manifest_path(manifest_path)
+    if resolved_manifest is None:
+        raise typer.BadParameter("A promoted model manifest is required for the dashboard")
+    if not resolved_manifest.is_file():
+        raise typer.BadParameter(f"Model manifest does not exist: {resolved_manifest}")
+    try:
+        resolved_host = resolve_host(host, "DASHBOARD_HOST", "0.0.0.0")
+        resolved_port = resolve_port(port, "DASHBOARD_PORT", 8501)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
     environment = os.environ.copy()
-    environment["MOLGNN_MANIFEST_PATH"] = str(manifest_path.resolve())
+    environment["MOLGNN_MANIFEST_PATH"] = str(resolved_manifest.resolve())
     dashboard_path = Path(__file__).with_name("dashboard.py")
     subprocess.run(
         [
@@ -757,9 +782,9 @@ def run_dashboard_command(
             "run",
             str(dashboard_path),
             "--server.address",
-            host,
+            resolved_host,
             "--server.port",
-            str(port),
+            str(resolved_port),
             "--server.headless",
             "true",
         ],

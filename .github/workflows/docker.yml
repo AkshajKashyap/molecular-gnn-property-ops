@@ -1,0 +1,53 @@
+name: Docker
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "compose.yaml"
+      - "pyproject.toml"
+      - "src/**"
+      - "scripts/docker_*.sh"
+      - ".github/workflows/docker.yml"
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "compose.yaml"
+      - "pyproject.toml"
+      - "src/**"
+      - "scripts/docker_*.sh"
+      - ".github/workflows/docker.yml"
+
+jobs:
+  container-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build CPU image
+        run: docker build --tag molecular-gnn-property-ops:ci .
+      - name: Verify runtime imports
+        run: |
+          docker run --rm molecular-gnn-property-ops:ci python -c \
+            "import fastapi, rdkit, streamlit, torch, torch_geometric; import molgnn_ops.dashboard; from molgnn_ops.api import create_app"
+      - name: Validate Compose configuration
+        env:
+          IMAGE_NAME: molecular-gnn-property-ops:ci
+        run: docker compose config --quiet
+      - name: Verify model-free API health and unavailable model response
+        run: |
+          docker run --detach --name molgnn-ci-api --publish 18000:8000 \
+            molecular-gnn-property-ops:ci \
+            molgnn-ops serve-api --host 0.0.0.0 --port 8000
+          trap 'docker rm --force molgnn-ci-api >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://localhost:18000/health >/tmp/health.json; then
+              break
+            fi
+            sleep 1
+          done
+          python -c "import json; data=json.load(open('/tmp/health.json')); assert data == {'status': 'ok', 'model_loaded': False, 'model_id': None}"
+          test "$(curl --silent --output /tmp/model.json --write-out '%{http_code}' http://localhost:18000/model)" = "503"

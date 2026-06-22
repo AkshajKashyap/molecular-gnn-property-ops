@@ -76,7 +76,8 @@ async def test_api_endpoints_and_model_load_once(
 
 
 @pytest.mark.anyio
-async def test_api_without_model_returns_service_unavailable() -> None:
+async def test_api_without_model_returns_service_unavailable(monkeypatch) -> None:
+    monkeypatch.delenv("MOLGNN_MANIFEST_PATH", raising=False)
     app = api_module.create_app()
     transport = httpx.ASGITransport(app=app)
     async with app.router.lifespan_context(app):
@@ -88,6 +89,45 @@ async def test_api_without_model_returns_service_unavailable() -> None:
     assert health.json()["model_loaded"] is False
     assert model_info.status_code == 503
     assert prediction.status_code == 503
+
+
+@pytest.mark.anyio
+async def test_api_loads_manifest_from_environment(
+    promoted_manifest_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("MOLGNN_MANIFEST_PATH", str(promoted_manifest_path))
+    app = api_module.create_app()
+    transport = httpx.ASGITransport(app=app)
+
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            health = await client.get("/health")
+
+    assert health.json()["model_loaded"] is True
+    assert health.json()["model_id"] == "synthetic-gcn-v1"
+
+
+@pytest.mark.anyio
+async def test_explicit_manifest_takes_precedence_over_environment(
+    promoted_manifest_path: Path,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("MOLGNN_MANIFEST_PATH", str(tmp_path / "missing.json"))
+    app = api_module.create_app(promoted_manifest_path)
+
+    async with app.router.lifespan_context(app):
+        assert app.state.loaded_model.manifest.model_id == "synthetic-gcn-v1"
+
+
+@pytest.mark.anyio
+async def test_configured_missing_manifest_fails_startup(tmp_path: Path) -> None:
+    app = api_module.create_app(tmp_path / "missing.json")
+
+    with pytest.raises(FileNotFoundError, match="Model manifest not found"):
+        async with app.router.lifespan_context(app):
+            pass
 
 
 @pytest.mark.anyio

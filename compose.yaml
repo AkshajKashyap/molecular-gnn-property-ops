@@ -1,0 +1,43 @@
+services:
+  api:
+    build:
+      context: .
+    image: ${IMAGE_NAME:-molecular-gnn-property-ops:latest}
+    command: ["molgnn-ops", "serve-api"]
+    environment:
+      MOLGNN_MANIFEST_PATH: /app/artifacts/registry/esol-gcn-v1/manifest.json
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./artifacts/registry:/app/artifacts/registry:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+    image: ${IMAGE_NAME:-molecular-gnn-property-ops:latest}
+    command: ["molgnn-ops", "run-dashboard"]
+    environment:
+      MOLGNN_MANIFEST_PATH: /app/artifacts/registry/esol-gcn-v1/manifest.json
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: "8501"
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    volumes:
+      - ./artifacts/registry:/app/artifacts/registry:ro
+    healthcheck:
+      test:
+        ["CMD", "curl", "--fail", "--silent", "http://localhost:8501/_stcore/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped

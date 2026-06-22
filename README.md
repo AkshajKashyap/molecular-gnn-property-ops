@@ -23,6 +23,8 @@ Milestone 9.5 completes that work with stable sample identity and multiple GCNs 
 against one immutable scaffold split.
 Milestone 10 adds validation-only model promotion and FastAPI molecular solubility inference.
 Milestone 11 adds a Streamlit molecule explorer and training-set applicability context.
+Milestone 12 adds reproducible CPU containers, Docker Compose operations, and CI quality and
+model-free service smoke checks.
 
 ## Milestone 2 Splits
 
@@ -183,6 +185,42 @@ The Streamlit explorer renders the query molecule, displays predicted log and mo
 solubility, summarizes molecular descriptors and applicability warnings, and lists or renders
 the nearest training molecules. The same information is available programmatically from
 `POST /predict/context`; existing prediction endpoints remain unchanged.
+
+## Milestone 12 Docker and CI
+
+One Python 3.13 slim image packages the CLI, FastAPI service, Streamlit explorer, RDKit,
+CPU PyTorch, and PyG. It runs as a non-root user and deliberately contains no datasets,
+training checkpoints, or promoted registry artifacts. API and dashboard containers mount
+the host registry read-only and use the same image with different commands.
+
+GitHub Actions runs Ruff and the full unit suite on Python 3.13. A separate Docker workflow
+builds the CPU image, validates runtime imports and Compose configuration, and verifies that
+the API can report healthy model-free status without downloading data or training a model.
+See [the operations guide](docs/operations.md) for configuration and troubleshooting.
+
+Promote a model, build the image, and start both services:
+
+```bash
+bash scripts/promote_esol_gcn.sh
+bash scripts/docker_build.sh
+docker compose up --detach
+```
+
+Use alternate host ports without changing container ports:
+
+```bash
+API_PORT=8010 DASHBOARD_PORT=8502 docker compose up --detach
+```
+
+Run the operational smoke checks and stop the services:
+
+```bash
+bash scripts/docker_smoke.sh
+docker compose down
+```
+
+The combined image is intentionally substantial because RDKit, CPU Torch/PyG, FastAPI,
+and Streamlit share one reproducible runtime. It does not include CUDA.
 
 ## Installation
 

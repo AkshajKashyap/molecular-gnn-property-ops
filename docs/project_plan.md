@@ -92,10 +92,16 @@ seed-dependent partitions and ambiguous SMILES-only alignment.
 - Streamlit molecule rendering, descriptors, predictions, and nearest-neighbor exploration
 - Explicit separation between structural similarity, uncertainty, and reliability
 
+### Milestone 12: Docker, CI, and operational smoke testing
+
+- Reusable Python 3.13 CPU image for the CLI, FastAPI API, and Streamlit dashboard
+- Non-root runtime with promoted registry artifacts mounted read-only
+- Independent Compose services, health checks, configurable host ports, and run scripts
+- Python quality CI plus model-free Docker build, import, Compose, and API smoke checks
+- Host and container operations documentation with explicit promotion prerequisites
+
 ## Future milestones
 
-12. Docker.
-13. CI matrix and smoke tests.
-14. Final model card.
-15. Tracked portfolio reports.
-16. Release and versioning.
+13. Final model card and portfolio documentation.
+14. Tracked portfolio reports.
+15. Release and versioning.

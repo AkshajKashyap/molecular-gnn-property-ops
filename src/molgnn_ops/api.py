@@ -20,6 +20,7 @@ from molgnn_ops.inference import (
     predict_smiles_batch,
     predict_smiles_with_context,
 )
+from molgnn_ops.service_config import resolve_manifest_path
 
 
 def _require_model(request: Request) -> LoadedPromotedModel:
@@ -76,11 +77,14 @@ def _model_info(loaded_model: LoadedPromotedModel) -> ModelInfoResponse:
 
 def create_app(manifest_path: Path | None = None) -> FastAPI:
     """Create a FastAPI application that loads one promoted model at startup."""
+    resolved_manifest_path = resolve_manifest_path(manifest_path)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.loaded_model = (
-            load_promoted_model(manifest_path) if manifest_path is not None else None
+            load_promoted_model(resolved_manifest_path)
+            if resolved_manifest_path is not None
+            else None
         )
         yield
 
