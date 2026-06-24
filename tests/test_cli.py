@@ -680,3 +680,83 @@ def test_run_dashboard_command_uses_environment(tmp_path: Path, monkeypatch) -> 
     assert captured["env"]["MOLGNN_MANIFEST_PATH"] == str(manifest_path.resolve())
     assert "127.0.0.3" in captured["command"]
     assert "8601" in captured["command"]
+
+
+def test_version_option() -> None:
+    from molgnn_ops.cli import app
+
+    result = CliRunner().invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert "1.0.0" in result.output
+
+
+def test_project_info_command_smoke() -> None:
+    from molgnn_ops import cli as cli_module
+
+    result = CliRunner().invoke(cli_module.app, ["project-info"])
+
+    assert result.exit_code == 0
+    assert "molecular-gnn-property-ops" in result.output
+    assert "Version: 1.0.0" in result.output
+    assert "GCN" in result.output
+    assert "Docker" in result.output
+
+
+def test_generate_portfolio_reports_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    captured = {}
+
+    def fake_generate(output_dir, **kwargs):
+        captured["output_dir"] = output_dir
+        captured["kwargs"] = kwargs
+        return {"benchmark_summary_json": str(tmp_path / "benchmark_summary.json")}
+
+    monkeypatch.setattr(cli_module, "generate_portfolio_reports", fake_generate)
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "generate-portfolio-reports",
+            str(tmp_path / "reports"),
+            "--benchmark-comparison-json",
+            str(tmp_path / "comparison.json"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["output_dir"] == tmp_path / "reports"
+    assert captured["kwargs"]["benchmark_comparison_json"] == tmp_path / "comparison.json"
+    assert "Generated portfolio reports" in result.output
+
+
+def test_generate_demo_command_smoke(tmp_path: Path, monkeypatch) -> None:
+    from molgnn_ops import cli as cli_module
+
+    captured = {}
+
+    def fake_generate(manifest_path, output_dir, top_k):
+        captured.update(
+            {"manifest_path": manifest_path, "output_dir": output_dir, "top_k": top_k}
+        )
+        return {"demo_summary_md": str(tmp_path / "demo_summary.md")}
+
+    monkeypatch.setattr(cli_module, "generate_demo", fake_generate)
+    result = CliRunner().invoke(
+        cli_module.app,
+        [
+            "generate-demo",
+            str(tmp_path / "manifest.json"),
+            str(tmp_path / "demo"),
+            "--top-k",
+            "2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "manifest_path": tmp_path / "manifest.json",
+        "output_dir": tmp_path / "demo",
+        "top_k": 2,
+    }
+    assert "Generated molecular demo" in result.output

@@ -1,0 +1,91 @@
+{
+  "benchmark_rows": [
+    {
+      "method": "Fingerprint random forest",
+      "notes": "Morgan fingerprint classical baseline.",
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "split": "scaffold",
+      "test_rmse_mean": 1.847980833926914,
+      "test_rmse_std": 0.02139121055541615
+    },
+    {
+      "method": "GCN",
+      "notes": "Repeated-seed GNN comparison.",
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "split": "scaffold",
+      "test_rmse_mean": 1.339454356739515,
+      "test_rmse_std": 0.07384768754669406
+    },
+    {
+      "method": "GIN",
+      "notes": "Repeated-seed GNN comparison.",
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "split": "scaffold",
+      "test_rmse_mean": 1.4498563826784234,
+      "test_rmse_std": 0.13721279936773365
+    },
+    {
+      "method": "Promoted fixed-split GCN",
+      "notes": "Selected by validation RMSE 1.3420.",
+      "seeds": [
+        "split 42",
+        "model 43"
+      ],
+      "split": "scaffold",
+      "test_rmse_mean": 1.3501974828901644,
+      "test_rmse_std": null
+    }
+  ],
+  "best_repeated_seed_run": {
+    "best_epoch": 50,
+    "dataset_name": "esol",
+    "metrics_json": "artifacts/benchmarks/esol/gnn_comparison/gcn/seed_44/training/metrics.json",
+    "model_name": "gcn",
+    "report_md": "artifacts/benchmarks/esol/gnn_comparison/gcn/seed_44/training/report.md",
+    "seed": 44,
+    "split_strategy": "scaffold",
+    "test_mae": 0.975970890615466,
+    "test_r2": 0.6921335659420125,
+    "test_rmse": 1.2391446178426762,
+    "val_mae": 0.9688012529517243,
+    "val_r2": 0.6208481877133734,
+    "val_rmse": 1.2781943761250845
+  },
+  "data_quality": {
+    "conflicting_target_groups": 6,
+    "dataset_size": 1128,
+    "duplicate_canonical_smiles_groups": 11
+  },
+  "dataset": "esol",
+  "project": "molecular-gnn-property-ops",
+  "promoted_model": {
+    "model_id": "esol-gcn-v1",
+    "model_seed": 43,
+    "model_type": "gcn",
+    "post_selection_test_metrics": {
+      "mae": 1.0385344629368838,
+      "r2": 0.6441207150939929,
+      "rmse": 1.3501974828901644
+    },
+    "split_seed": 42,
+    "validation_metrics": {
+      "mae": 1.0057712710027158,
+      "r2": 0.5448054503047268,
+      "rmse": 1.3420166774975013
+    }
+  },
+  "unavailable_sections": [],
+  "version": "1.0.0"
+}

@@ -1,30 +1,103 @@
 # Molecular GNN Property Ops
 
-## Goal
+[![Quality](https://github.com/AkshajKashyap/molecular-gnn-property-ops/actions/workflows/quality.yml/badge.svg)](https://github.com/AkshajKashyap/molecular-gnn-property-ops/actions/workflows/quality.yml)
+[![Docker](https://github.com/AkshajKashyap/molecular-gnn-property-ops/actions/workflows/docker.yml/badge.svg)](https://github.com/AkshajKashyap/molecular-gnn-property-ops/actions/workflows/docker.yml)
+![Python](https://img.shields.io/badge/python-3.13-blue)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
-Build a reproducible molecular property prediction system from SMILES strings. Future
-milestones will cover inference services, an interactive molecule explorer, deployment,
-and final model documentation.
+A reproducible molecular solubility prediction project that takes SMILES strings from data
+ingestion through scaffold-split evaluation, GNN baselines, validation-based promotion,
+FastAPI inference, Streamlit exploration, Docker, CI, and final portfolio documentation.
 
-## Current Milestone
+## Key Results
+
+| Method | Split | Seeds | Test RMSE | Notes |
+| --- | --- | --- | ---: | --- |
+| Morgan fingerprint random forest | scaffold | 42, 43, 44 | 1.8480 +/- 0.0214 | classical baseline |
+| GCN | scaffold | 42, 43, 44 | 1.3395 +/- 0.0738 | best repeated-seed mean |
+| GIN | scaffold | 42, 43, 44 | 1.4499 +/- 0.1372 | reported without hiding weaker results |
+| Promoted fixed-split GCN | scaffold | split 42, model 43 | 1.3502 | selected by validation RMSE 1.3420 |
+
+The fixed-split ensemble uncertainty experiment was negative: ensemble disagreement did not
+rank errors effectively, with uncertainty-error correlations around -0.016. The API and
+dashboard therefore expose applicability context, not confidence estimates.
+
+## Core Capabilities
+
+- ESOL/Delaney ingestion, deterministic random and scaffold splits, and duplicate audits
+- RDKit graph featurization, Morgan fingerprints, fingerprint baselines, GCN, and GIN
+- Repeated-seed benchmark comparison and fixed-split ensemble validation
+- Validation-only model promotion with self-contained manifests and a training reference index
+- FastAPI single, batch, and applicability-context endpoints
+- Streamlit molecule explorer with nearest-neighbor context
+- CPU Docker image, Docker Compose services, and GitHub Actions quality/Docker workflows
+
+## Architecture Overview
+
+`download -> prepare -> audit -> graph/fingerprint features -> train -> evaluate -> promote -> serve`
+
+At inference time:
+
+`SMILES -> RDKit validation/canonicalization -> molecular graph -> GCN -> logS -> mol/L`
+
+Applicability context uses:
+
+`SMILES -> Morgan fingerprint -> Tanimoto neighbors -> descriptor-range checks -> warnings`
+
+See [architecture documentation](docs/architecture.md) for diagrams and registry details.
+
+## Quick Start
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -e ".[gnn,api,dashboard]"
+pytest -q
+ruff check .
+molgnn-ops project-info
+```
+
+Promote the verified ESOL GCN model, run a demo prediction, and serve the API/dashboard:
+
+```bash
+bash scripts/promote_esol_gcn.sh
+molgnn-ops predict-smiles artifacts/registry/esol-gcn-v1/manifest.json "CCO"
+bash scripts/generate_demo.sh
+bash scripts/docker_build.sh
+docker compose up --detach
+```
+
+## Demo
+
+`bash scripts/generate_demo.sh` writes `artifacts/demo/predictions.json`,
+`artifacts/demo/context_predictions.json`, and `artifacts/demo/demo_summary.md`. These are
+generated artifacts and are intentionally not tracked.
+
+## Documentation
+
+- [Model card](docs/model_card.md)
+- [Architecture](docs/architecture.md)
+- [Experimental methodology](docs/experimental_methodology.md)
+- [Operations guide](docs/operations.md)
+- [Tracked benchmark summary](reports/portfolio/benchmark_summary.md)
+- [Uncertainty summary](reports/portfolio/uncertainty_summary.md)
+- [System verification summary](reports/portfolio/system_verification.md)
+- [Release checklist](docs/release_checklist.md)
+
+## Detailed Milestone History
 
 Milestone 1 established project paths, logging, validated CSV loading, and command-line
-utilities. Milestone 2 adds reproducible dataset preparation and persistent random or
-scaffold split metadata. Milestone 3 converts valid SMILES into molecular graph records. It
-does not include tensor conversion. Milestone 4 adds classical Morgan fingerprint baselines
-before any neural network training. Milestone 5 adds a reproducible real-data benchmark
-workflow using ESOL/Delaney. Milestone 6 adds benchmark diagnostics and seeded split
-comparison. Milestone 7 adds the first small GCN and GIN molecular graph baselines.
-Milestone 8 compares those architectures across repeated seeds and reports their
-aggregate performance alongside the fingerprint baseline when it is available.
-Milestone 9 adds validation-calibrated GNN ensemble uncertainty and molecular error
-analysis without treating the resulting intervals as formal guarantees.
-Milestone 9.5 completes that work with stable sample identity and multiple GCNs trained
-against one immutable scaffold split.
-Milestone 10 adds validation-only model promotion and FastAPI molecular solubility inference.
-Milestone 11 adds a Streamlit molecule explorer and training-set applicability context.
-Milestone 12 adds reproducible CPU containers, Docker Compose operations, and CI quality and
-model-free service smoke checks.
+utilities. Milestone 2 added reproducible dataset preparation and persistent random or
+scaffold split metadata. Milestone 3 converted valid SMILES into molecular graph records.
+Milestone 4 added classical Morgan fingerprint baselines before neural network training.
+Milestone 5 added a reproducible real-data benchmark workflow using ESOL/Delaney.
+Milestone 6 added benchmark diagnostics and seeded split comparison. Milestone 7 added the
+first small GCN and GIN molecular graph baselines. Milestone 8 compared those architectures
+across repeated seeds. Milestone 9 and 9.5 validated and then rejected unsupported ensemble
+uncertainty claims with stable sample identity. Milestone 10 added validation-only model
+promotion and FastAPI inference. Milestone 11 added a Streamlit explorer and applicability
+context. Milestone 12 added Docker, Compose, and CI. Milestone 13 prepares the 1.0.0
+portfolio release with model-card, architecture, methodology, reports, demo generation,
+release metadata, and GitHub polish.
 
 ## Milestone 2 Splits
 
@@ -215,12 +288,36 @@ API_PORT=8010 DASHBOARD_PORT=8502 docker compose up --detach
 Run the operational smoke checks and stop the services:
 
 ```bash
-bash scripts/docker_smoke.sh
+bash scripts/docker_smoke_test.sh
 docker compose down
 ```
 
 The combined image is intentionally substantial because RDKit, CPU Torch/PyG, FastAPI,
 and Streamlit share one reproducible runtime. It does not include CUDA.
+
+## Milestone 13 Portfolio Release
+
+Version 1.0.0 turns the technical system into a portfolio-ready repository. It adds the
+formal [model card](docs/model_card.md), [architecture documentation](docs/architecture.md),
+[experimental methodology](docs/experimental_methodology.md), tracked summaries under
+`reports/portfolio/`, release notes, citation metadata, contribution guidance, and a
+reproducible demo script.
+
+The tracked reports are small snapshots of verified results. Large generated outputs remain
+ignored. Regenerate reports only from explicit inputs:
+
+```bash
+molgnn-ops generate-portfolio-reports reports/portfolio \
+  --benchmark-comparison-json artifacts/benchmarks/esol/gnn_comparison/gnn_comparison_summary.json \
+  --fixed-split-summary-json artifacts/benchmarks/esol/fixed_split_gcn/split_seed_42/fixed_split_ensemble_summary.json \
+  --promoted-manifest-json artifacts/registry/esol-gcn-v1/manifest.json
+```
+
+Generate a local demo without starting long-running services:
+
+```bash
+bash scripts/generate_demo.sh
+```
 
 ## Installation
 
@@ -263,6 +360,8 @@ ruff check .
 Create the expected data, report, artifact, and configuration directories:
 
 ```bash
+molgnn-ops --version
+molgnn-ops project-info
 molgnn-ops init-dirs
 ```
 

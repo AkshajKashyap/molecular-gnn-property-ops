@@ -9,6 +9,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from molgnn_ops import __version__
 from molgnn_ops.baselines import train_fingerprint_baseline
 from molgnn_ops.benchmark_compare import run_split_comparison
 from molgnn_ops.data_sources import list_dataset_specs
@@ -26,6 +27,12 @@ from molgnn_ops.fingerprints import featurize_fingerprints_from_csv
 from molgnn_ops.gnn_compare import run_gnn_comparison
 from molgnn_ops.model_registry import promote_model
 from molgnn_ops.paths import ARTIFACTS_DIR, ensure_project_dirs
+from molgnn_ops.portfolio import (
+    HEADLINE_RESULTS,
+    PROJECT_CAPABILITIES,
+    generate_demo,
+    generate_portfolio_reports,
+)
 from molgnn_ops.prep import prepare_dataset
 from molgnn_ops.reporting import write_diagnostics_report
 from molgnn_ops.service_config import resolve_host, resolve_manifest_path, resolve_port
@@ -36,8 +43,34 @@ from molgnn_ops.workflows import (
     run_gnn_uncertainty_analysis,
 )
 
-app = typer.Typer(help="Utilities for the molecular property prediction project.")
 console = Console()
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        console.print(f"molgnn-ops {__version__}")
+        raise typer.Exit
+
+
+app = typer.Typer(
+    help="Utilities for the molecular property prediction project.",
+    no_args_is_help=True,
+)
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show the package version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Molecular GNN property operations CLI."""
 
 
 @app.command("init-dirs")
@@ -791,6 +824,119 @@ def run_dashboard_command(
         check=True,
         env=environment,
     )
+
+
+@app.command("generate-portfolio-reports")
+def generate_portfolio_reports_command(
+    output_dir: Annotated[
+        Path,
+        typer.Argument(help="Directory where tracked portfolio summaries are written."),
+    ],
+    benchmark_comparison_json: Annotated[
+        Path | None,
+        typer.Option(help="Explicit GNN comparison summary JSON."),
+    ] = None,
+    fixed_split_summary_json: Annotated[
+        Path | None,
+        typer.Option(help="Explicit fixed-split ensemble summary JSON."),
+    ] = None,
+    uncertainty_summary_json: Annotated[
+        Path | None,
+        typer.Option(help="Explicit uncertainty summary JSON."),
+    ] = None,
+    promoted_manifest_json: Annotated[
+        Path | None,
+        typer.Option(help="Explicit promoted model manifest JSON."),
+    ] = None,
+) -> None:
+    """Generate deterministic small portfolio summary files from explicit inputs."""
+    try:
+        outputs = generate_portfolio_reports(
+            output_dir,
+            benchmark_comparison_json=benchmark_comparison_json,
+            fixed_split_summary_json=fixed_split_summary_json,
+            uncertainty_summary_json=uncertainty_summary_json,
+            promoted_manifest_json=promoted_manifest_json,
+        )
+    except (FileNotFoundError, ValueError) as error:
+        typer.echo(f"Portfolio report generation failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    console.print("[bold]Generated portfolio reports[/bold]")
+    for label, path in outputs.items():
+        console.print(f"{label}: {path}")
+
+
+@app.command("generate-demo")
+def generate_demo_command(
+    manifest_path: Annotated[Path, typer.Argument(help="Promoted model manifest.")],
+    output_dir: Annotated[Path, typer.Argument(help="Demo artifact directory.")],
+    top_k: Annotated[int, typer.Option(help="Nearest training molecules per query.")] = 3,
+) -> None:
+    """Generate a small point-prediction and applicability-context demo."""
+    try:
+        outputs = generate_demo(manifest_path, output_dir, top_k=top_k)
+    except (FileNotFoundError, RuntimeError, ValueError) as error:
+        typer.echo(f"Demo generation failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    console.print("[bold]Generated molecular demo[/bold]")
+    for label, path in outputs.items():
+        console.print(f"{label}: {path}")
+
+
+@app.command("project-info")
+def project_info() -> None:
+    """Print concise release metadata and headline benchmark results."""
+    registry_manifest = ARTIFACTS_DIR / "registry" / "esol-gcn-v1" / "manifest.json"
+    console.print("[bold]molecular-gnn-property-ops[/bold]")
+    console.print(f"Version: {__version__}")
+    console.print("Supported task: ESOL aqueous log-solubility regression from SMILES")
+    console.print("Dataset: ESOL/Delaney")
+    console.print(
+        "API/dashboard: available through FastAPI, Streamlit, Docker, and Compose"
+    )
+    console.print("Docker: CPU-only image with promoted registry mounted read-only")
+    registry_status = (
+        "esol-gcn-v1 manifest available"
+        if registry_manifest.is_file()
+        else "no promoted manifest found"
+    )
+    console.print(f"Local registry status: {registry_status}")
+
+    results = Table(title="Documented Headline Results")
+    results.add_column("Method")
+    results.add_column("Split")
+    results.add_column("Seeds")
+    results.add_column("Test RMSE", justify="right")
+    results.add_column("Notes")
+    for method, values in HEADLINE_RESULTS.items():
+        if method == "promoted_fixed_split_gcn":
+            results.add_row(
+                "Promoted fixed-split GCN",
+                str(values["split"]),
+                f"split {values['split_seed']}, model {values['model_seed']}",
+                f"{values['test_rmse']:.4f}",
+                f"validation RMSE {values['validation_rmse']:.4f}",
+            )
+        else:
+            method_label = {
+                "fingerprint_random_forest": "Fingerprint random forest",
+                "gcn": "GCN",
+                "gin": "GIN",
+            }.get(method, method.replace("_", " "))
+            results.add_row(
+                method_label,
+                str(values["split"]),
+                ",".join(str(seed) for seed in values["seeds"]),
+                f"{values['test_rmse_mean']:.4f} +/- {values['test_rmse_std']:.4f}",
+                "three-seed scaffold benchmark",
+            )
+    console.print(results)
+
+    capabilities = Table(title="CLI Capability Areas")
+    capabilities.add_column("Capability")
+    for capability in PROJECT_CAPABILITIES:
+        capabilities.add_row(capability)
+    console.print(capabilities)
 
 
 if __name__ == "__main__":

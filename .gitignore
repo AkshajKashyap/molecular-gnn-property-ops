@@ -10,6 +10,7 @@ data/processed/
 artifacts/models/
 artifacts/benchmarks/
 artifacts/registry/
+artifacts/demo/
 *.pt
 *.pth
 *.ckpt

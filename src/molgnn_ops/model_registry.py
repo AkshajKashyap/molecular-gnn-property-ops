@@ -3,12 +3,12 @@ import json
 import shutil
 import subprocess
 from datetime import UTC, datetime
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from molgnn_ops import __version__
 from molgnn_ops.data_sources import get_dataset_spec
 from molgnn_ops.featurization import ATOM_FEATURE_CONFIG, BOND_FEATURE_CONFIG
 from molgnn_ops.reference_index import build_reference_index
@@ -133,10 +133,7 @@ def select_model_by_validation(
 
 
 def _package_version() -> str:
-    try:
-        return version("molecular-gnn-property-ops")
-    except PackageNotFoundError:
-        return "0.1.0"
+    return __version__
 
 
 def _git_commit() -> str | None:

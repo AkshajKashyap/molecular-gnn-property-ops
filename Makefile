@@ -31,4 +31,4 @@ docker-down:
 	docker compose down
 
 docker-smoke:
-	bash scripts/docker_smoke.sh
+	bash scripts/docker_smoke_test.sh

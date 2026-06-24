@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "molecular-gnn-property-ops"
-version = "0.1.0"
+version = "1.0.0"
 description = "Molecular property prediction with graph neural networks, scaffold splits, calibration, and deployment."
 requires-python = ">=3.11"
 dependencies = [

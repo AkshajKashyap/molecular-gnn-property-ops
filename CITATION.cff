@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata in this file."
+title: "molecular-gnn-property-ops"
+authors:
+  - family-names: "Kashyap"
+    given-names: "Akshaj"
+version: "1.0.0"
+date-released: "2026-06-24"
+repository-code: "https://github.com/AkshajKashyap/molecular-gnn-property-ops"
+type: software
+abstract: "A reproducible molecular solubility prediction portfolio project with ESOL ingestion, scaffold splits, fingerprint and GNN baselines, model promotion, FastAPI inference, Streamlit exploration, Docker, CI, and honest uncertainty validation."
+

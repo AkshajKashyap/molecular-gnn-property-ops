@@ -100,8 +100,43 @@ seed-dependent partitions and ambiguous SMILES-only alignment.
 - Python quality CI plus model-free Docker build, import, Compose, and API smoke checks
 - Host and container operations documentation with explicit promotion prerequisites
 
-## Future milestones
+### Milestone 13: Version 1.0.0 portfolio release
 
-13. Final model card and portfolio documentation.
-14. Tracked portfolio reports.
-15. Release and versioning.
+- Formal model card with intended use, limitations, benchmark results, data quality, and responsible-use notes
+- Architecture documentation with GitHub-renderable diagrams and tracked/generated artifact boundaries
+- Experimental methodology explaining scaffold splits, validation-based selection, uncertainty rejection, and sample-ID alignment
+- Small tracked portfolio summaries under `reports/portfolio/`
+- Deterministic portfolio-report generation from explicit input files
+- Reproducible local demo generation without starting long-running services
+- `project-info` and `--version` CLI support
+- MIT license, citation metadata, changelog, release checklist, and contribution guide
+- README top section optimized for quick portfolio review
+
+## Version 1.0.0 Completed Capabilities
+
+- Data pipeline: ESOL ingestion, validation, deterministic preparation, and scaffold/random splits
+- Molecular representation: RDKit canonicalization, graph features, and Morgan fingerprints
+- Classical baseline: fingerprint random forest and linear references
+- GNN training: GCN and GIN molecular regression baselines
+- Realistic evaluation: scaffold splits, repeated seeds, diagnostics, and split comparison
+- Uncertainty validation: fixed-split ensemble analysis with unsupported confidence rejected
+- Promotion: validation-only model selection and self-contained registry package
+- API: FastAPI single, batch, and applicability-context inference
+- Dashboard: Streamlit molecule explorer with training-neighbor context
+- Docker: CPU image, Compose services, non-root runtime, read-only registry mount
+- CI: quality and Docker smoke workflows
+- Documentation: model card, architecture, methodology, operations, reports, release notes
+- Release preparation: version 1.0.0 metadata, license, citation, and contribution guidance
+
+The project is complete as a portfolio release at version 1.0.0.
+
+## Optional Future Work
+
+- Additional MoleculeNet datasets
+- Classification tasks
+- Larger or pretrained molecular encoders
+- Improved uncertainty methods with evidence of useful error ranking
+- External deployment
+- Experiment tracking systems
+
+These are optional extensions, not requirements for considering the current project finished.

@@ -67,7 +67,7 @@ bash scripts/docker_run_dashboard.sh
 Run import checks and, when the promoted manifest exists, live API checks:
 
 ```bash
-bash scripts/docker_smoke.sh
+bash scripts/docker_smoke_test.sh
 ```
 
 ## Configuration

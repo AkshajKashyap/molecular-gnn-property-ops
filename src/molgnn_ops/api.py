@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, status
 
+from molgnn_ops import __version__
 from molgnn_ops.api_schemas import (
     BatchPredictionItem,
     BatchPredictionRequest,
@@ -90,7 +91,7 @@ def create_app(manifest_path: Path | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Molecular Solubility Inference API",
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
     )
 
